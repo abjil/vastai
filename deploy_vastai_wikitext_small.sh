@@ -46,12 +46,29 @@ stop_instance() {
     echo "SKIP_VAST_STOP=1 — leaving instance ${INSTANCE_ID} running."
     return 0
   fi
-  if ! command -v vastai >/dev/null 2>&1; then
-    echo "Warning: vastai CLI not found; cannot stop instance ${INSTANCE_ID}."
+
+  echo "Stopping vast.ai instance ${INSTANCE_ID}..."
+
+  if [[ -n "${VAST_API_KEY:-}" ]]; then
+    if curl -fsS -X PUT "https://console.vast.ai/api/v0/instances/${INSTANCE_ID}/" \
+      -H "Accept: application/json" \
+      -H "Authorization: Bearer ${VAST_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d '{"state": "stopped"}'; then
+      echo
+      echo "Stop request sent via Vast.ai API."
+      return 0
+    fi
+    echo "Warning: Vast.ai API stop request failed."
+  fi
+
+  if command -v vastai >/dev/null 2>&1; then
+    vastai stop instance "${INSTANCE_ID}" && return 0
+    echo "Warning: vastai CLI failed to stop instance ${INSTANCE_ID}."
     return 0
   fi
-  echo "Stopping vast.ai instance ${INSTANCE_ID}..."
-  vastai stop instance "${INSTANCE_ID}" || echo "Warning: failed to stop instance ${INSTANCE_ID}."
+
+  echo "Warning: cannot stop instance ${INSTANCE_ID} (set VAST_API_KEY or install vastai CLI)."
 }
 
 echo "=== Installing system packages ==="
@@ -60,8 +77,11 @@ apt-get update
 apt-get install -y p7zip-full mc git
 
 echo "=== Installing Python packages ==="
+export PIP_ROOT_USER_ACTION=ignore
 pip install --upgrade pip
-pip install numpy transformers datasets tiktoken wandb tqdm einops gdown vastai
+# Do not pip-install vastai here: it pins cryptography and fails on NGC/Ubuntu
+# images where cryptography is owned by apt. stop_instance uses the REST API.
+pip install numpy transformers datasets tiktoken wandb tqdm einops gdown
 
 if [[ -n "${WANDB_API_KEY:-}" ]]; then
   echo "=== Configuring Weights & Biases ==="
