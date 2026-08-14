@@ -22,6 +22,10 @@ for sh in "$SCRIPT_DIR"/*.sh; do
 done
 pass "bash -n all scripts"
 
+# Clean checkouts may not retain executable modes when authored on Windows.
+chmod +x "$SCRIPT_DIR"/*.sh || fail "chmod +x bin scripts"
+pass "shell scripts executable"
+
 "$PYTHON" -m py_compile \
   "$SCRIPT_DIR/envutil.py" \
   "$SCRIPT_DIR/render_template.py" \

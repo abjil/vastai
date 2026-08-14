@@ -1,38 +1,64 @@
-# Spin off to GitHub
+# Repository publication status
 
-This directory is the **entire future repository**. HomeLAN only hosts it until a public GitHub repo exists, so Vast.ai onstart can `git clone` without reaching `gitea.lan`.
+The HomeLAN-to-GitHub spinoff is complete. The canonical repository is:
 
-## Why GitHub, not Gitea
+`https://github.com/abjil/vastai`
 
-Vast.ai instances are on the public internet. They cannot use a private LAN Gitea URL unless you also expose Gitea, which this project does not want. GitHub clone + onstart is the deployment path.
+Vast.ai instances can reach this repository without access to a private LAN
+Git service. Development should occur in this repository rather than in a
+second HomeLAN copy.
 
-## Steps
+## Publication cleanup
 
-1. Create an empty public GitHub repository (working name: `vastai-wakeup`).
-2. Copy **the contents** of `machines/vastai/` to that repo root (not the `machines/vastai` folder name itself).
+The repository now has an MIT license, uses its canonical GitHub URL, keeps
+Python bytecode out of version control, and provides an onstart template with
+no HomeLAN or placeholder clone logic.
 
-   ```sh
-   git clone https://github.com/YOUR_USER/vastai-wakeup.git
-   rsync -a --exclude '.git' machines/vastai/ vastai-wakeup/
-   cd vastai-wakeup
-   git add .
-   git commit -m "Initial import from HomeLAN machines/vastai"
-   git push -u origin main
-   ```
+These release blockers remain:
 
-3. Replace placeholders:
-   - `YOUR_USER/vastai-wakeup` in README, DEPLOY, and `templates/onstart.vastai.sh`
-   - Choose a real license and replace `LICENSE.txt`
-4. Confirm GitHub Actions `CI` is green (`bin/selftest.sh`).
-5. Point Vast.ai onstart at `WAKEUP_REPO_URL=https://github.com/YOUR_USER/vastai-wakeup.git`.
-6. Keep HomeLAN `machines/vastai` as a snapshot or delete it after the move — do not develop in both places.
+1. Confirm the updated CI passes from a clean GitHub-hosted checkout.
+2. Complete lifecycle, configuration, logging, and security hardening.
+3. Publish the first reviewed release/tag only after the real Vast.ai
+   stop/start test passes.
 
-## What not to copy
+See [FIX_IMPLEMENTATION_PLAN.md](../FIX_IMPLEMENTATION_PLAN.md) for ownership,
+order, and acceptance criteria.
 
-- Any real `wakeup.env`
-- `ACK`, `wakeup.log`, `wakeup.pid`, `runtime/`
-- HomeLAN `.cursor/` context
+## Canonical naming
 
-## Later development
+- GitHub repository: `abjil/vastai`
+- Product name: Vast.ai wakeup notifier
+- Default installation path: `/workspace/vastai-wakeup`
 
-All further features (extra SMS providers, Vast.ai API helper, etc.) should land on GitHub, not in HomeLAN.
+The installation directory intentionally keeps the descriptive
+`vastai-wakeup` name even though the GitHub repository is named `vastai`.
+
+## Files that must never be published
+
+- populated `wakeup.env` or other credential files;
+- `ACK`, `session.id`, `started_at`, `wakeup.pid`, or lock state;
+- `wakeup.log` and `runtime/`;
+- editor/agent context or private HomeLAN configuration;
+- Python bytecode and cache directories.
+
+Before every release, inspect the complete tracked file list rather than
+relying only on `.gitignore`.
+
+## Release workflow
+
+1. Complete the release phase in the implementation plan.
+2. Confirm the working tree contains no secrets or generated runtime data.
+3. Run CI from a clean checkout.
+4. Run channel smoke tests with private test recipients.
+5. Run the unattended Vast.ai stop/start and ACK lifecycle test.
+6. Tag the exact reviewed commit.
+7. Configure production instances to use that tag or commit.
+
+Do not configure onstart to execute an unreviewed moving branch.
+
+## Future development
+
+Potential additions—external Vast.ai API monitoring, more providers, or daemon
+supervision—belong in this repository. External API monitoring should remain a
+separate component because its value comes from failing independently of the
+in-instance notifier.

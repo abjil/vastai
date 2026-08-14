@@ -27,7 +27,8 @@ where `msg.txt` is a short plaintext file.
 
 ## Public SMTP email
 
-Uses `bin/send_email_from_template.sh` — the same generic sender as HomeLAN GPD/backupserver. It is **not** tied to a LAN mail host. Point it at a public provider.
+Uses the generic `bin/send_email_from_template.sh` sender. It is **not** tied
+to a LAN mail host. Point it at a public provider.
 
 `SMTP_TO` (and `SMTP_CC` / `SMTP_BCC`) accept comma-separated addresses.
 

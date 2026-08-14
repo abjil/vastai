@@ -2,7 +2,7 @@
 #
 # send_email_from_template.sh — generic SMTP email sender from a template/body file
 #
-# Copied from HomeLAN machines/gpd/bin (and backupserver). Public SMTP; not LAN-specific.
+# Generic public SMTP sender; not tied to a LAN mail host.
 #
 # Usage:
 #   send_email_from_template.sh <ENV_FILE> <TEMPLATE_FILE>

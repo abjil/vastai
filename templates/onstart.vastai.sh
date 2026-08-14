@@ -1,28 +1,24 @@
 #!/bin/bash
 # Paste this into the Vast.ai instance "onstart" / startup script field.
-# Edit WAKEUP_REPO_URL after the GitHub spinoff. Until then, copy this
-# project to /workspace/vastai-wakeup and leave the clone block commented.
+#
+# Install and test a reviewed revision of https://github.com/abjil/vastai at
+# /workspace/vastai-wakeup before enabling this hook. Startup intentionally
+# does not clone or update code from a moving branch.
 
 set -euo pipefail
 
 INSTALL_DIR="${INSTALL_DIR:-/workspace/vastai-wakeup}"
-# After spinoff:
-# WAKEUP_REPO_URL="${WAKEUP_REPO_URL:-https://github.com/YOUR_USER/vastai-wakeup.git}"
 
 mkdir -p /workspace
 
-# --- GitHub clone (enable after spinoff) ---
-# if [[ ! -d "$INSTALL_DIR/.git" ]]; then
-#   git clone "$WAKEUP_REPO_URL" "$INSTALL_DIR"
-# else
-#   git -C "$INSTALL_DIR" pull --ff-only || true
-# fi
-
-if [[ ! -x "$INSTALL_DIR/bin/onstart.sh" && ! -f "$INSTALL_DIR/bin/onstart.sh" ]]; then
-  echo "vastai-wakeup not found at $INSTALL_DIR — copy the project there or enable git clone."
+if [[ ! -f "$INSTALL_DIR/bin/onstart.sh" ]]; then
+  echo "vastai-wakeup not found at $INSTALL_DIR"
+  echo "Install a reviewed revision before enabling this onstart hook."
   exit 1
 fi
 
 export DATA_DIR="$INSTALL_DIR"
 export WAKEUP_ENV="$INSTALL_DIR/wakeup.env"
-exec "$INSTALL_DIR/bin/onstart.sh"
+# Invoke through Bash because a Windows-authored checkout may lack executable
+# file modes. onstart.sh restores executable bits for the remaining scripts.
+exec bash "$INSTALL_DIR/bin/onstart.sh"
