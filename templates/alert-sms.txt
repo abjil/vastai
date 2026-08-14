@@ -1,0 +1,1 @@
+VAST.AI UP {{INSTANCE_NAME}} #{{ALERT_NUM}} IP {{PUBLIC_IP}} elapsed {{ELAPSED}}. Ack: {{ACK_HINT}}

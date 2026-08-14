@@ -1,0 +1,1 @@
+[VAST.AI] {{INSTANCE_NAME}} acked after {{ALERT_NUM}} alert(s), elapsed {{ELAPSED}}. Alerts stopped.

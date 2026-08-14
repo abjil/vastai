@@ -1,0 +1,9 @@
+wakeup.env
+.env
+ACK
+wakeup.log
+wakeup.pid
+started_at
+runtime/
+*.swp
+.DS_Store

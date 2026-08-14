@@ -1,0 +1,14 @@
+Subject: [VAST.AI] {{INSTANCE_NAME}} acked — alerts stopped
+Content-Type: text/plain; charset=utf-8
+
+Wakeup notifier stopped after ACK.
+
+Instance:   {{INSTANCE_NAME}}
+Label:      {{VAST_LABEL}}
+Hostname:   {{HOSTNAME}}
+Public IP:  {{PUBLIC_IP}}
+Started:    {{STARTED_AT}}
+Stopped:    {{NOW}}
+Elapsed:    {{ELAPSED}}
+Alerts sent: {{ALERT_NUM}}
+ACK file:   {{ACK_FILE}}

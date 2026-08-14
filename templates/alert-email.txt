@@ -1,0 +1,20 @@
+Subject: [VAST.AI] {{INSTANCE_NAME}} is UP and billing (#{{ALERT_NUM}})
+Content-Type: text/plain; charset=utf-8
+
+Vast.ai instance is running and billing.
+
+Instance:   {{INSTANCE_NAME}}
+Label:      {{VAST_LABEL}}
+Hostname:   {{HOSTNAME}}
+Public IP:  {{PUBLIC_IP}}
+Started:    {{STARTED_AT}}
+Now:        {{NOW}}
+Host uptime: {{UPTIME}}
+Elapsed:    {{ELAPSED}}
+Alert #:    {{ALERT_NUM}}
+
+To stop these alerts, SSH in and run:
+  {{ACK_HINT}}
+
+Or:
+  /workspace/vastai-wakeup/bin/ack.sh

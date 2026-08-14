@@ -1,0 +1,7 @@
+[VAST.AI] {{INSTANCE_NAME}} is UP and billing (#{{ALERT_NUM}})
+
+IP {{PUBLIC_IP}}
+Label {{VAST_LABEL}}
+Elapsed {{ELAPSED}}
+
+Stop: {{ACK_HINT}}

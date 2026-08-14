@@ -1,0 +1,3 @@
+License not chosen yet.
+
+This package is staged inside the private HomeLAN repository. When it is copied to a public GitHub repository, replace this file with an SPDX license (MIT is a reasonable default for a small operator script) and delete this paragraph.

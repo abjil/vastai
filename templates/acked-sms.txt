@@ -1,0 +1,1 @@
+VAST.AI acked {{INSTANCE_NAME}} after {{ALERT_NUM}} alerts, {{ELAPSED}}.
