@@ -6,12 +6,27 @@
 #   export VAST_API_KEY=...           # required to stop the instance
 #   bash deploy_vastai_wikitext_small.sh <instance_id>
 #
+# Progress is written to stdout and /workspace/deploy_wikitext.log.
+# If you SSH in after onstart started the script, run:
+#   tail -f /workspace/deploy_wikitext.log
+#
 # Or:
 #   VAST_INSTANCE_ID=12345 bash deploy_vastai_wikitext_small.sh
 #
 # Set SKIP_VAST_STOP=1 to keep the instance running after training completes.
 
 set -euo pipefail
+
+LOG_FILE="${DEPLOY_LOG:-/workspace/deploy_wikitext.log}"
+mkdir -p "$(dirname "${LOG_FILE}")"
+# Mirror stdout/stderr to a log file so progress is visible over SSH and after
+# onstart detaches. Disable with DEPLOY_NO_TEE=1.
+if [[ "${DEPLOY_NO_TEE:-0}" != "1" ]]; then
+  exec > >(tee -a "${LOG_FILE}") 2>&1
+fi
+echo "=== Deploy log: ${LOG_FILE} (tail -f ${LOG_FILE}) ==="
+
+export PYTHONUNBUFFERED=1
 
 INSTANCE_ID="${1:-${VAST_INSTANCE_ID:-}}"
 REPO_DIR="/workspace/tbp-mHC"
@@ -41,12 +56,12 @@ stop_instance() {
 
 echo "=== Installing system packages ==="
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq p7zip-full mc git
+apt-get update
+apt-get install -y p7zip-full mc git
 
 echo "=== Installing Python packages ==="
-pip install -q --upgrade pip
-pip install -q numpy transformers datasets tiktoken wandb tqdm einops gdown vastai
+pip install --upgrade pip
+pip install numpy transformers datasets tiktoken wandb tqdm einops gdown vastai
 
 if [[ -n "${WANDB_API_KEY:-}" ]]; then
   echo "=== Configuring Weights & Biases ==="
@@ -69,7 +84,7 @@ if [[ ! -f "${ARCHIVE_NAME}" ]]; then
 fi
 
 echo "=== Extracting parquet files ==="
-7z x "${ARCHIVE_NAME}" -y
+7z x "${ARCHIVE_NAME}" -y -bb1
 if compgen -G "${DATA_DIR}/*.parquet" > /dev/null; then
   mv -f "${DATA_DIR}"/*.parquet "${DATA_DIR}/parquet/"
 fi
@@ -92,7 +107,8 @@ python -c "import torch; [print(f'GPU {i}: {torch.cuda.get_device_name(i)}') for
 
 echo "=== Starting training ==="
 set +e
-bash "${TRAINING_SCRIPT}"
+# Line-buffer torchrun/Python so loss lines appear as they are emitted.
+stdbuf -oL -eL bash "${TRAINING_SCRIPT}"
 training_exit=$?
 set -e
 
