@@ -2,18 +2,19 @@
 # End-to-end Vast.ai deployment for WikiText-103 small-model training.
 #
 # Usage (on the rented instance):
-#   export WANDB_API_KEY=...          # optional but recommended
-#   export VAST_API_KEY=...           # required to stop the instance
-#   bash deploy_vastai_wikitext_small.sh <instance_id>
+#   bash deploy_vastai_wikitext_small.sh
+#   bash deploy_vastai_wikitext_small.sh --stop <instance_id>
 #
 # Progress is written to stdout and /workspace/deploy_wikitext.log.
 # If you SSH in after onstart started the script, run:
 #   tail -f /workspace/deploy_wikitext.log
 #
 # Or:
-#   VAST_INSTANCE_ID=12345 bash deploy_vastai_wikitext_small.sh
+#   VAST_INSTANCE_ID=12345 STOP_AFTER_TRAINING=1 bash deploy_vastai_wikitext_small.sh
 #
-# Set SKIP_VAST_STOP=1 to keep the instance running after training completes.
+# Optional stop after training (--stop or STOP_AFTER_TRAINING=1):
+#   export VAST_API_KEY=...   # required when stopping via API
+# Legacy: SKIP_VAST_STOP=1 disables stop even if --stop is set.
 
 set -euo pipefail
 
@@ -28,22 +29,57 @@ echo "=== Deploy log: ${LOG_FILE} (tail -f ${LOG_FILE}) ==="
 
 export PYTHONUNBUFFERED=1
 
-INSTANCE_ID="${1:-${VAST_INSTANCE_ID:-}}"
+STOP_AFTER_TRAINING="${STOP_AFTER_TRAINING:-0}"
+INSTANCE_ID="${VAST_INSTANCE_ID:-}"
+
+usage() {
+  echo "Usage: $0 [--stop] [<vast_instance_id>]"
+  echo "   or: STOP_AFTER_TRAINING=1 VAST_INSTANCE_ID=<id> $0"
+  echo
+  echo "  --stop    Stop the Vast.ai instance after training (needs VAST_API_KEY)."
+  echo "            Default: leave the instance running."
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stop)
+      STOP_AFTER_TRAINING=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      if [[ -n "${INSTANCE_ID}" ]]; then
+        echo "Error: unexpected argument: $1" >&2
+        usage >&2
+        exit 1
+      fi
+      INSTANCE_ID="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "${SKIP_VAST_STOP:-0}" == "1" ]]; then
+  STOP_AFTER_TRAINING=0
+fi
+
+if [[ "${STOP_AFTER_TRAINING}" == "1" && -z "${INSTANCE_ID}" ]]; then
+  echo "Error: --stop requires a vast instance id." >&2
+  usage >&2
+  exit 1
+fi
+
 REPO_DIR="/workspace/tbp-mHC"
 TRAINING_SCRIPT="${REPO_DIR}/train_local_wikitext_small.sh"
 DATA_DIR="${REPO_DIR}/data/wikitext-103-raw-v1"
 GDOWN_ID="1FdCBv9LOb8--BosHhtajc7zk_1HpjnwZ"
 ARCHIVE_NAME="wikitext-103-raw-v1.7z"
 
-if [[ -z "${INSTANCE_ID}" ]]; then
-  echo "Usage: $0 <vast_instance_id>"
-  echo "   or: VAST_INSTANCE_ID=<id> $0"
-  exit 1
-fi
-
 stop_instance() {
-  if [[ "${SKIP_VAST_STOP:-0}" == "1" ]]; then
-    echo "SKIP_VAST_STOP=1 — leaving instance ${INSTANCE_ID} running."
+  if [[ "${STOP_AFTER_TRAINING}" != "1" ]]; then
     return 0
   fi
 
@@ -96,29 +132,23 @@ else
   git clone https://github.com/alyubinin/tbp-mHC "${REPO_DIR}"
 fi
 
-echo "=== Downloading WikiText-103 parquet archive ==="
-mkdir -p "${DATA_DIR}/parquet"
+echo "=== Downloading WikiText-103 dataset archive ==="
+mkdir -p "${DATA_DIR}"
 cd "${DATA_DIR}"
 if [[ ! -f "${ARCHIVE_NAME}" ]]; then
   gdown "${GDOWN_ID}" -O "${ARCHIVE_NAME}"
 fi
 
-echo "=== Extracting parquet files ==="
-7z x "${ARCHIVE_NAME}" -y -bb1
-if compgen -G "${DATA_DIR}/*.parquet" > /dev/null; then
-  mv -f "${DATA_DIR}"/*.parquet "${DATA_DIR}/parquet/"
-fi
-if ! compgen -G "${DATA_DIR}/parquet/*.parquet" > /dev/null; then
-  echo "Error: no parquet files found under ${DATA_DIR}/parquet after extraction."
-  exit 1
+echo "=== Extracting dataset ==="
+if [[ ! -f "${DATA_DIR}/train.bin" ]]; then
+  7z x "${ARCHIVE_NAME}" -y -bb1
+else
+  echo "train.bin already exists — skipping extraction"
 fi
 
-echo "=== Preparing tokenized dataset ==="
-cd "${REPO_DIR}"
 if [[ ! -f "${DATA_DIR}/train.bin" ]]; then
-  python "${DATA_DIR}/prepare.py"
-else
-  echo "train.bin already exists — skipping prepare.py"
+  echo "Error: train.bin not found under ${DATA_DIR} after extraction."
+  exit 1
 fi
 
 echo "=== GPU check ==="
@@ -133,5 +163,9 @@ training_exit=$?
 set -e
 
 echo "=== Training finished (exit code: ${training_exit}) ==="
-stop_instance
+if [[ "${STOP_AFTER_TRAINING}" == "1" ]]; then
+  stop_instance
+else
+  echo "Instance left running (pass --stop <id> to stop after training)."
+fi
 exit "${training_exit}"
