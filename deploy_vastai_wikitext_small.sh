@@ -14,6 +14,8 @@
 #
 # Optional stop after training (--stop or STOP_AFTER_TRAINING=1):
 #   export VAST_API_KEY=...   # required when stopping via API
+# The first interactive run securely prompts for WANDB_API_KEY and saves it
+# to /workspace/tbp-mHC/.env for subsequent runs.
 # Legacy: SKIP_VAST_STOP=1 disables stop even if --stop is set.
 
 set -euo pipefail
@@ -73,6 +75,7 @@ if [[ "${STOP_AFTER_TRAINING}" == "1" && -z "${INSTANCE_ID}" ]]; then
 fi
 
 REPO_DIR="/workspace/tbp-mHC"
+ENV_FILE="${REPO_DIR}/.env"
 TRAINING_SCRIPT="${REPO_DIR}/train_local_wikitext_small.sh"
 DATA_DIR="${REPO_DIR}/data/wikitext-103-raw-v1"
 GDOWN_ID="1FdCBv9LOb8--BosHhtajc7zk_1HpjnwZ"
@@ -119,11 +122,6 @@ pip install --upgrade pip
 # images where cryptography is owned by apt. stop_instance uses the REST API.
 pip install numpy transformers datasets tiktoken wandb tqdm einops gdown
 
-if [[ -n "${WANDB_API_KEY:-}" ]]; then
-  echo "=== Configuring Weights & Biases ==="
-  wandb login --relogin "${WANDB_API_KEY}"
-fi
-
 echo "=== Cloning repository ==="
 mkdir -p /workspace
 if [[ -d "${REPO_DIR}/.git" ]]; then
@@ -131,6 +129,37 @@ if [[ -d "${REPO_DIR}/.git" ]]; then
 else
   git clone https://github.com/alyubinin/tbp-mHC "${REPO_DIR}"
 fi
+
+echo "=== Configuring Weights & Biases ==="
+if [[ -z "${WANDB_API_KEY:-}" && -f "${ENV_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  set +a
+fi
+
+if [[ -z "${WANDB_API_KEY:-}" ]]; then
+  if [[ ! -t 0 && ! -t 1 ]]; then
+    echo "Error: WANDB_API_KEY is missing and no interactive terminal is available." >&2
+    echo "Set WANDB_API_KEY in the environment before running this script." >&2
+    exit 1
+  fi
+
+  read -r -s -p "Enter WANDB_API_KEY: " WANDB_API_KEY </dev/tty
+  echo
+  if [[ -z "${WANDB_API_KEY}" ]]; then
+    echo "Error: WANDB_API_KEY cannot be empty." >&2
+    exit 1
+  fi
+fi
+
+if [[ ! -f "${ENV_FILE}" ]] || ! grep -q '^WANDB_API_KEY=' "${ENV_FILE}"; then
+  printf 'WANDB_API_KEY=%q\n' "${WANDB_API_KEY}" >> "${ENV_FILE}"
+fi
+chmod 600 "${ENV_FILE}"
+
+export WANDB_API_KEY
+wandb login --relogin "${WANDB_API_KEY}"
 
 echo "=== Downloading WikiText-103 dataset archive ==="
 mkdir -p "${DATA_DIR}"
