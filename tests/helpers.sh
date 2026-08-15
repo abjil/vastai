@@ -13,6 +13,23 @@ pass() { echo "OK: $*"; }
 
 PYTHON=${PYTHON:-$(resolve_python)} || fail "python3 is required"
 
+stop_process() {
+  local pid=${1:-}
+  local i
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  kill "$pid" 2>/dev/null || true
+  for ((i = 0; i < 100; i++)); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.05
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
+
 wait_for_pattern() {
   local file=$1
   local pattern=$2

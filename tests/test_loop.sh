@@ -7,9 +7,7 @@ set -euo pipefail
 TMP=$(mktemp -d)
 TEST_DAEMON_PID=""
 cleanup() {
-  if [[ -n "$TEST_DAEMON_PID" ]] && kill -0 "$TEST_DAEMON_PID" 2>/dev/null; then
-    kill "$TEST_DAEMON_PID" 2>/dev/null || true
-  fi
+  stop_process "$TEST_DAEMON_PID"
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -50,7 +48,7 @@ for ((i = 0; i < 100; i++)); do
   sleep 0.1
 done
 if kill -0 "$daemon_pid" 2>/dev/null; then
-  kill "$daemon_pid" 2>/dev/null || true
+  stop_process "$daemon_pid"
   fail "dry-run daemon did not exit after ACK"
 fi
 TEST_DAEMON_PID=""
@@ -84,7 +82,7 @@ max_pid=$(read_daemon_pid "$MAX_DIR/wakeup.pid")
 TEST_DAEMON_PID="$max_pid"
 [[ "$(grep -c 'sending alert #' "$MAX_DIR/wakeup.log")" -eq 1 ]] \
   || fail "MAX_ALERTS sent more than one alert"
-kill "$max_pid" 2>/dev/null || true
+stop_process "$max_pid"
 TEST_DAEMON_PID=""
 pass "MAX_ALERTS stops further sends"
 
@@ -114,6 +112,6 @@ grep -q 'sending alert #2 (next interval 2s)' "$BACK_DIR/wakeup.log" \
   || fail "second interval did not double"
 grep -q 'sending alert #3 (next interval 2s)' "$BACK_DIR/wakeup.log" \
   || fail "backoff was not capped at INTERVAL_MAX_SEC"
-kill "$back_pid" 2>/dev/null || true
+stop_process "$back_pid"
 TEST_DAEMON_PID=""
 pass "backoff doubles and caps at INTERVAL_MAX_SEC"

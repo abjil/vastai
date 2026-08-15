@@ -10,14 +10,14 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/workspace/vastai-wakeup}"
 WAKEUP_REVISION="${WAKEUP_REVISION:-}"
 
-mkdir -p /workspace
-
 if [[ -z "$WAKEUP_REVISION" ]]; then
   echo "ERROR: WAKEUP_REVISION is required (reviewed tag or commit)."
   echo "Example: export WAKEUP_REVISION=v1.0.0"
   echo "Refusing to start from an unpinned moving branch."
   exit 1
 fi
+
+mkdir -p "$(dirname "$INSTALL_DIR")"
 
 if [[ ! -f "$INSTALL_DIR/bin/onstart.sh" || ! -f "$INSTALL_DIR/bin/pin_revision.sh" ]]; then
   echo "vastai-wakeup not found at $INSTALL_DIR"
