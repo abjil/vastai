@@ -10,6 +10,7 @@ trap cleanup EXIT
 
 export DATA_DIR="$TMP"
 export WAKEUP_ENV="$ROOT_DIR/templates/wakeup.env.example"
+export ACK_FILE="$TMP/ACK"
 export WAKEUP_LOG="$TMP/wakeup.log"
 export WAKEUP_PID="$TMP/wakeup.pid"
 export WAKEUP_RUNTIME="$TMP/runtime"
