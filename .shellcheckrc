@@ -1,6 +1,6 @@
 # Follow `# shellcheck source=` directives. CI also passes -x.
 external-sources=true
 
-# Allowlisted KEY=VALUE lines are assigned by eval_shell_exports after
+# Allowlisted KEY=VALUE lines are assigned by eval_shell_exports afte
 # dump_env_shell.py. ShellCheck cannot see those runtime assignments.
 disable=SC2154

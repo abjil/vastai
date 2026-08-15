@@ -24,6 +24,11 @@ from envutil import (  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _secure_env(path: Path) -> None:
+    if path.exists():
+        path.chmod(0o600)
+
+
 class ParseEnvTests(unittest.TestCase):
     def _parse(self, text: str) -> dict[str, str]:
         with tempfile.TemporaryDirectory() as tmp:
@@ -87,6 +92,7 @@ class LoadConfigTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            _secure_env(env_file)
             override_ack = tmp_path / "override-ACK"
             loaded = load_config(
                 env_file,
@@ -115,6 +121,7 @@ class LoadConfigTests(unittest.TestCase):
 
             partial = tmp_path / "partial.env"
             partial.write_text("TELEGRAM_BOT_TOKEN=token-only\n", encoding="utf-8")
+            _secure_env(partial)
             with self.assertRaises(ConfigError) as exc:
                 load_config(partial, root_dir=ROOT, require_channel=True)
             self.assertIn("TELEGRAM_CHAT_ID", str(exc.exception))

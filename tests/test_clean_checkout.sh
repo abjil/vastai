@@ -23,8 +23,8 @@ chmod a-x "$COPY/bin"/*.sh 2>/dev/null || true
 DATA_DIR="$TMP/data"
 mkdir -p "$DATA_DIR"
 write_lifecycle_env "$TMP/wakeup.env" "$DATA_DIR"
-DATA_DIR="$DATA_DIR" \
-WAKEUP_ENV="$TMP/wakeup.env" \
+export DATA_DIR
+export WAKEUP_ENV="$TMP/wakeup.env"
 WAKEUP_LOG="$DATA_DIR/wakeup.log" \
 WAKEUP_PID="$DATA_DIR/wakeup.pid" \
 WAKEUP_RUNTIME="$DATA_DIR/runtime" \
@@ -33,12 +33,10 @@ WAKEUP_RUNTIME="$DATA_DIR/runtime" \
   || fail "bash wakeup.sh failed without executable mode"
 pass "wakeup.sh runs through bash without executable Git modes"
 
-DATA_DIR="$DATA_DIR" \
-WAKEUP_ENV="$TMP/wakeup.env" \
-WAKEUP_LOG="$DATA_DIR/onstart.log" \
-WAKEUP_PID="$DATA_DIR/onstart.pid" \
-WAKEUP_RUNTIME="$DATA_DIR/onstart-runtime" \
-  bash "$COPY/bin/onstart.sh" >/dev/null
+export WAKEUP_LOG="$DATA_DIR/onstart.log"
+export WAKEUP_PID="$DATA_DIR/onstart.pid"
+export WAKEUP_RUNTIME="$DATA_DIR/onstart-runtime"
+bash "$COPY/bin/onstart.sh" >/dev/null
 if [[ ! -x "$COPY/bin/wakeup.sh" && "$(uname -s)" == "Linux" ]]; then
   fail "onstart did not restore executable bits"
 fi
