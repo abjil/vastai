@@ -323,22 +323,23 @@ def read_cmdline(pid: int, proc_root: Path) -> list[str]:
 def command_matches_script(command: list[str], script_path: Path) -> bool:
     if not command:
         return False
+    wanted_paths = {_norm_path(str(script_path))}
     try:
-        wanted = _norm_path(str(Path(script_path).resolve()))
+        wanted_paths.add(_norm_path(str(Path(script_path).resolve())))
     except OSError:
-        wanted = _norm_path(str(script_path))
+        pass
     for part in command:
         if not part:
             continue
-        candidate = _norm_path(part)
+        candidate_paths = {_norm_path(part)}
         try:
-            resolved = _norm_path(str(Path(part).resolve()))
+            candidate_paths.add(_norm_path(str(Path(part).resolve())))
         except OSError:
-            resolved = candidate
-        if resolved == wanted or candidate == wanted:
-            return True
-        if candidate.endswith(wanted) or resolved.endswith(wanted):
-            return True
+            pass
+        for candidate in candidate_paths:
+            for wanted in wanted_paths:
+                if candidate == wanted or candidate.endswith(wanted):
+                    return True
     return False
 
 
