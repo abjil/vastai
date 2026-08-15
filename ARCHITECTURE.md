@@ -174,7 +174,7 @@ process's PID.
 `wakeup.env` accepts simple `KEY=VALUE` assignments with comments and quoted
 values. It is data, not a shell program.
 
-### Target precedence
+### Implemented precedence
 
 1. Command-line options override all other sources.
 2. Explicit process environment overrides file values only for documented,
@@ -182,16 +182,20 @@ values. It is data, not a shell program.
 3. `wakeup.env` supplies persistent values and credentials.
 4. Built-in defaults apply last.
 
-All entry points must use the same rule. Unknown keys should produce a warning;
-dangerous shell keys such as `PATH`, `HOME`, and `PYTHONPATH` must never be
-exported from the config file.
+The shared Python parser now supplies effective configuration to the main loop,
+ACK tools, and all channel adapters. Credentials and recipients are not
+process-overridable.
 
-### Validation
+Unknown keys are still accepted in the file, but only documented configuration
+keys are exported into Bash. Reserved names such as `DRY_RUN`, `ONCE`, `PATH`,
+`HOME`, and `PYTHONPATH` are never exported. Phase 3 will add unknown-key
+warnings.
 
-Startup validates:
+### Implemented validation
+
+Before lifecycle state changes, startup validates:
 
 - required and writable paths;
-- owner-only permissions for `wakeup.env`;
 - positive integer intervals, polling, and timeouts;
 - `INTERVAL_MAX_SEC >= INTERVAL_SEC`;
 - non-negative `MAX_ALERTS`;
@@ -199,6 +203,7 @@ Startup validates:
 - at least one usable channel for normal operation.
 
 Dry-run rendering may operate without live credentials.
+Owner-only permission enforcement for `wakeup.env` remains Phase 3 work.
 
 ## Alert control flow
 
@@ -240,8 +245,10 @@ ACK prevents a new cycle but does not cancel an already-running network call.
 - Facts such as uptime are recomputed for every alert.
 - `wakeup.sh` owns daemon log writes. The launcher redirects only unexpected
   bootstrap output, avoiding duplicate records.
-- Logs have a documented size bound or simple rotation strategy.
-- Logged provider errors are truncated/sanitized so credentials cannot appear.
+- Application and mirrored-output logs rotate at 1 MiB with three backups by
+  default.
+- Logged provider errors are credential-redacted and truncated to 2 KiB by
+  default.
 
 The daemon is not supervised by systemd inside the supported container.
 **Target:** bootstrap detects immediate startup failure. Longer-term supervision

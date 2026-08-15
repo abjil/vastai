@@ -50,9 +50,7 @@ TEMPLATE_FILE=$2
 [[ -f "$ENV_FILE" ]] || { echo "ERROR: ENV_FILE '$ENV_FILE' not found." >&2; exit 66; }
 [[ -f "$TEMPLATE_FILE" ]] || { echo "ERROR: TEMPLATE_FILE '$TEMPLATE_FILE' not found." >&2; exit 66; }
 
-"$PYTHON" - "$ENV_FILE" "$TEMPLATE_FILE" <<'PY'
-import os
-import shlex
+"$PYTHON" - "$SCRIPT_DIR" "$ENV_FILE" "$TEMPLATE_FILE" <<'PY'
 import smtplib
 import ssl
 import sys
@@ -60,43 +58,11 @@ from email.message import EmailMessage
 from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
 
-ENV_FILE = Path(sys.argv[1])
-TEMPLATE_FILE = Path(sys.argv[2])
+sys.path.insert(0, sys.argv[1])
+from envutil import bool_env, load_config, split_list
 
-
-def parse_env(path: Path) -> dict:
-    env = {}
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export "):].lstrip()
-        if "=" not in line:
-            continue
-        key, val = line.split("=", 1)
-        key = key.strip()
-        val = val.strip()
-        try:
-            parts = shlex.split(val, posix=True)
-            val = parts[0] if parts else ""
-        except ValueError:
-            val = val.strip('"').strip("'")
-        env[key] = val
-    return env
-
-
-def bool_env(env: dict, key: str, default: bool = False) -> bool:
-    value = str(env.get(key, ""))
-    if value == "":
-        return default
-    return value.strip().lower() in {"1", "yes", "true", "on"}
-
-
-def split_addresses(value: str):
-    if not value:
-        return []
-    return [x.strip() for x in value.replace(";", ",").split(",") if x.strip()]
+ENV_FILE = Path(sys.argv[2])
+TEMPLATE_FILE = Path(sys.argv[3])
 
 
 def parse_template(path: Path):
@@ -117,18 +83,14 @@ def parse_template(path: Path):
     return {}, text
 
 
-env = parse_env(ENV_FILE)
-# Allow caller environment to override non-secret runtime values.
-for key in ["SMTP_HOST", "SMTP_PORT", "SMTP_FROM", "SMTP_FROM_NAME", "SMTP_TO", "SMTP_CC",
-            "SMTP_BCC", "SMTP_TLS", "SMTP_SSL", "SMTP_TIMEOUT", "EMAIL_SUBJECT",
-            "EMAIL_CONTENT_TYPE"]:
-    if os.environ.get(key):
-        env[key] = os.environ[key]
+env = load_config(ENV_FILE)
 
 required = ["SMTP_HOST", "SMTP_FROM", "SMTP_TO"]
 missing = [k for k in required if not env.get(k)]
 if missing:
     raise SystemExit("ERROR: Missing required .env variables: " + ", ".join(missing))
+if bool(env.get("SMTP_USER", "")) != bool(env.get("SMTP_PASSWORD", "")):
+    raise SystemExit("ERROR: SMTP_USER and SMTP_PASSWORD must be set together.")
 
 headers, body = parse_template(TEMPLATE_FILE)
 subject = headers.get("subject") or env.get("EMAIL_SUBJECT")
@@ -143,9 +105,9 @@ if not maintype:
 
 from_addr = env["SMTP_FROM"]
 from_name = env.get("SMTP_FROM_NAME", "")
-to_addrs = split_addresses(env.get("SMTP_TO", ""))
-cc_addrs = split_addresses(env.get("SMTP_CC", ""))
-bcc_addrs = split_addresses(env.get("SMTP_BCC", ""))
+to_addrs = split_list(env.get("SMTP_TO", ""))
+cc_addrs = split_list(env.get("SMTP_CC", ""))
+bcc_addrs = split_list(env.get("SMTP_BCC", ""))
 all_rcpts = to_addrs + cc_addrs + bcc_addrs
 
 msg = EmailMessage()

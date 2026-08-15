@@ -42,14 +42,13 @@ metadata even when they do not contain credentials.
 
 ## Configuration loading
 
-The env file must be treated as data, not as a shell script. Values are
-shell-quoted before the current loader evaluates generated assignments, which
-prevents direct value injection. However, the current loader accepts arbitrary
-valid variable names and could overwrite `PATH`, `HOME`, or `PYTHONPATH`.
+The env file is treated as data, not as a shell script. One shared parser now
+applies validation and precedence across `wakeup.sh`, `ack.sh`, login-ack
+installation, and every channel adapter. Values are shell-quoted before Bash
+evaluates generated assignments, which prevents direct value injection.
 
-The target design exports only documented keys and uses one parser and
-precedence rule across `wakeup.sh`, `ack.sh`, login-ack installation, and every
-channel adapter.
+The current loader still accepts arbitrary valid variable names and could
+overwrite `PATH`, `HOME`, or `PYTHONPATH`. Phase 3 adds an export allowlist.
 
 Do not add shell commands, command substitutions, or unrelated environment
 variables to `wakeup.env`.
@@ -66,7 +65,8 @@ variables to `wakeup.env`.
   `icanhazip.com`. This discloses an instance request to those providers on each
   alert cycle. The target design makes this lookup optional.
 - Provider error responses can contain account or recipient metadata. Logged
-  error detail should be bounded and sanitized.
+  detail is credential-redacted, including URL-encoded and Base64 forms such as
+  Twilio Basic auth, and limited to 2 KiB by default.
 
 ## Deployment supply chain
 

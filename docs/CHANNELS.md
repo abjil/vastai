@@ -4,6 +4,13 @@ Configure channels in `wakeup.env`. Empty credentials disable that channel. At l
 
 The nag loop tries **Telegram, then email, then SMS** so a hung SMTP login does not delay the message you are most likely to see.
 
+Normal startup rejects incomplete channel credentials and requires at least one
+complete channel. Credential-free `--dry-run` remains available.
+`--test-channels` performs one live send and cannot be combined with
+`--dry-run`; it also overrides `WAKEUP_DRY_RUN=1`. HTTPS provider requests use
+`CHANNEL_TIMEOUT_SEC` (default 30 seconds), and logged provider detail is
+sanitized and limited by `ERROR_DETAIL_MAX_CHARS` (default 2048).
+
 ## Telegram (recommended)
 
 1. In Telegram, talk to [@BotFather](https://t.me/BotFather), `/newbot`, copy the token.

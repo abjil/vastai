@@ -1,24 +1,47 @@
 #!/usr/bin/env python3
-"""Print shell-safe KEY=VALUE assignments from an env file (stdout)."""
+"""Print validated, shell-safe wakeup configuration assignments."""
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from envutil import parse_env, shell_exports
+from envutil import ConfigError, load_config, shell_exports
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: dump_env_shell.py <ENV_FILE>", file=sys.stderr)
-        return 64
-    path = Path(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("env_file")
+    parser.add_argument("--root", help="Project root for dependent defaults")
+    parser.add_argument(
+        "--require-channel",
+        action="store_true",
+        help="require at least one complete channel unless dry-run is enabled",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="allow credential-free dry-run configuration",
+    )
+    args = parser.parse_args()
+
+    path = Path(args.env_file)
     if not path.is_file():
         print(f"ERROR: ENV_FILE '{path}' not found.", file=sys.stderr)
         return 66
-    sys.stdout.write(shell_exports(parse_env(path)))
+    try:
+        config = load_config(
+            path,
+            root_dir=Path(args.root) if args.root else None,
+            require_channel=args.require_channel,
+            dry_run=args.dry_run,
+        )
+    except (ConfigError, OSError) as exc:
+        print(f"ERROR: invalid configuration: {exc}", file=sys.stderr)
+        return 78
+    sys.stdout.write(shell_exports(config))
     return 0
 
 

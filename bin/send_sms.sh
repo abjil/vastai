@@ -39,13 +39,15 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
-from envutil import parse_env, split_list
+from envutil import load_config, sanitize_detail, split_list
 
-env = parse_env(Path(sys.argv[2]))
+env = load_config(Path(sys.argv[2]))
 sid = env.get("TWILIO_ACCOUNT_SID", "").strip()
 token = env.get("TWILIO_AUTH_TOKEN", "").strip()
 from_num = env.get("TWILIO_FROM", "").strip()
 to_list = split_list(env.get("SMS_TO", ""))
+timeout = int(env["CHANNEL_TIMEOUT_SEC"])
+detail_limit = int(env["ERROR_DETAIL_MAX_CHARS"])
 text = Path(sys.argv[3]).read_text(encoding="utf-8", errors="replace").strip()
 if len(text) > 1500:
     text = text[:1490] + "\n…"
@@ -69,14 +71,16 @@ for to in to_list:
     req = urllib.request.Request(url, data=body, method="POST")
     req.add_header("Authorization", f"Basic {auth}")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
+        detail = exc.read(detail_limit + 1).decode("utf-8", errors="replace")
+        detail = sanitize_detail(detail, config=env, secrets=[token, auth], limit=detail_limit)
         errors.append(f"{to}: HTTP {exc.code} {detail}")
         continue
     except Exception as exc:
-        errors.append(f"{to}: {exc}")
+        detail = sanitize_detail(str(exc), config=env, secrets=[token, auth], limit=detail_limit)
+        errors.append(f"{to}: {detail}")
         continue
     sid_out = payload.get("sid", "")
     print(f"SMS sent to {to} sid={sid_out}")

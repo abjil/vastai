@@ -20,6 +20,7 @@ ONCE=0
 DRY_RUN=0
 TEST_CHANNELS=0
 KEEP_ACK=0
+WANT_DRY_RUN=0
 
 usage() {
   cat <<'EOF'
@@ -27,7 +28,8 @@ Usage: wakeup.sh [options]
 
   --once           Send one alert (or acked message if ACK exists) and exit
   --dry-run        Render messages; do not send
-  --test-channels  One send on each configured channel; do not delete ACK
+  --test-channels  One live send on each configured channel; do not delete ACK
+                   Cannot be combined with --dry-run. Overrides WAKEUP_DRY_RUN.
   --keep-ack       Do not delete a leftover ACK at start
 EOF
 }
@@ -35,7 +37,7 @@ EOF
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --once) ONCE=1 ;;
-    --dry-run) DRY_RUN=1 ;;
+    --dry-run) WANT_DRY_RUN=1; DRY_RUN=1 ;;
     --test-channels) TEST_CHANNELS=1; ONCE=1; KEEP_ACK=1 ;;
     --keep-ack) KEEP_ACK=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -44,58 +46,68 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-DATA_DIR="${DATA_DIR:-$ROOT_DIR}"
-mkdir -p "$DATA_DIR"
-ENV_FILE="${WAKEUP_ENV:-$DATA_DIR/wakeup.env}"
-LOG_FILE="${WAKEUP_LOG:-$DATA_DIR/wakeup.log}"
-PID_FILE="${WAKEUP_PID:-$DATA_DIR/wakeup.pid}"
-RUNTIME_DIR="${WAKEUP_RUNTIME:-$DATA_DIR/runtime}"
-TEMPLATE_DIR="${WAKEUP_TEMPLATES:-$ROOT_DIR/templates}"
+if [[ "$TEST_CHANNELS" -eq 1 && "$WANT_DRY_RUN" -eq 1 ]]; then
+  echo "ERROR: --test-channels and --dry-run cannot be combined." >&2
+  exit 64
+fi
 
-log() {
-  local msg=$1
-  mkdir -p "$(dirname "$LOG_FILE")"
-  printf '%s: %s\n' "$(date -u +'%Y-%m-%d %H:%M:%S UTC')" "$msg" | tee -a "$LOG_FILE"
-}
+CLI_ONCE=$ONCE
+CLI_TEST_CHANNELS=$TEST_CHANNELS
+CLI_KEEP_ACK=$KEEP_ACK
+
+BOOTSTRAP_DATA_DIR="${DATA_DIR:-$ROOT_DIR}"
+ENV_FILE="${WAKEUP_ENV:-$BOOTSTRAP_DATA_DIR/wakeup.env}"
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  log "ERROR: env file not found: $ENV_FILE"
-  log "Copy templates/wakeup.env.example to wakeup.env and edit."
+  echo "ERROR: env file not found: $ENV_FILE" >&2
+  echo "Copy templates/wakeup.env.example to wakeup.env and edit." >&2
   exit 66
 fi
 
-_PRESET_DATA_DIR="${DATA_DIR:-}"
-_PRESET_ACK_FILE="${ACK_FILE:-}"
-_PRESET_LOG_FILE="${WAKEUP_LOG:-}"
-_PRESET_PID_FILE="${WAKEUP_PID:-}"
-_PRESET_RUNTIME_DIR="${WAKEUP_RUNTIME:-}"
+config_args=("$ENV_FILE" --root "$ROOT_DIR" --require-channel)
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  config_args+=(--dry-run)
+fi
+CONFIG_OUTPUT=$("$PYTHON" "$SCRIPT_DIR/dump_env_shell.py" "${config_args[@]}") || exit $?
+eval "$CONFIG_OUTPUT"
 
-eval "$("$PYTHON" "$SCRIPT_DIR/dump_env_shell.py" "$ENV_FILE")"
-
-# Explicit process environment wins over wakeup.env (used by tests and onstart).
-[[ -n "$_PRESET_DATA_DIR" ]] && DATA_DIR="$_PRESET_DATA_DIR"
-[[ -n "$_PRESET_ACK_FILE" ]] && ACK_FILE="$_PRESET_ACK_FILE"
-[[ -n "$_PRESET_LOG_FILE" ]] && WAKEUP_LOG="$_PRESET_LOG_FILE"
-[[ -n "$_PRESET_PID_FILE" ]] && WAKEUP_PID="$_PRESET_PID_FILE"
-[[ -n "$_PRESET_RUNTIME_DIR" ]] && WAKEUP_RUNTIME="$_PRESET_RUNTIME_DIR"
-
-# Env file may relocate data dir; re-apply defaults that depend on it.
-DATA_DIR="${DATA_DIR:-$ROOT_DIR}"
-ACK_FILE="${ACK_FILE:-$DATA_DIR/ACK}"
-LOG_FILE="${WAKEUP_LOG:-$DATA_DIR/wakeup.log}"
-PID_FILE="${WAKEUP_PID:-$DATA_DIR/wakeup.pid}"
-RUNTIME_DIR="${WAKEUP_RUNTIME:-$DATA_DIR/runtime}"
-STARTED_AT_FILE="${STARTED_AT_FILE:-$DATA_DIR/started_at}"
-INSTANCE_NAME="${INSTANCE_NAME:-vastai}"
-INTERVAL_SEC="${INTERVAL_SEC:-60}"
-INTERVAL_MAX_SEC="${INTERVAL_MAX_SEC:-900}"
-ACK_POLL_SEC="${ACK_POLL_SEC:-5}"
-MAX_ALERTS="${MAX_ALERTS:-0}"
-if [[ "${WAKEUP_DRY_RUN:-0}" =~ ^(1|yes|true|on)$ ]]; then
+ONCE=$CLI_ONCE
+KEEP_ACK=$CLI_KEEP_ACK
+TEST_CHANNELS=$CLI_TEST_CHANNELS
+if [[ "$CLI_TEST_CHANNELS" -eq 1 ]]; then
+  DRY_RUN=0
+elif [[ "$WANT_DRY_RUN" -eq 1 ]]; then
   DRY_RUN=1
+elif [[ "${WAKEUP_DRY_RUN:-0}" =~ ^(1|yes|true|on)$ ]]; then
+  DRY_RUN=1
+else
+  DRY_RUN=0
 fi
 
-mkdir -p "$DATA_DIR" "$RUNTIME_DIR"
+LOG_FILE="$WAKEUP_LOG"
+ERROR_LOG_FILE="$WAKEUP_ERROR_LOG"
+PID_FILE="$WAKEUP_PID"
+RUNTIME_DIR="$WAKEUP_RUNTIME"
+TEMPLATE_DIR="$WAKEUP_TEMPLATES"
+
+if ! ensure_writable_dir "$DATA_DIR" ||
+   ! ensure_writable_dir "$RUNTIME_DIR" ||
+   ! ensure_writable_parent "$ACK_FILE" ||
+   ! ensure_writable_path "$LOG_FILE" ||
+   ! ensure_writable_path "$ERROR_LOG_FILE" ||
+   ! ensure_writable_path "$PID_FILE" ||
+   ! ensure_writable_path "$STARTED_AT_FILE"; then
+  echo "ERROR: wakeup paths are not writable under DATA_DIR=$DATA_DIR" >&2
+  exit 73
+fi
+if ! ensure_templates_readable "$TEMPLATE_DIR"; then
+  echo "ERROR: notification templates are not readable under: $TEMPLATE_DIR" >&2
+  exit 66
+fi
+
+log() {
+  log_message "$LOG_FILE" "$LOG_MAX_BYTES" "$LOG_BACKUP_COUNT" "$1"
+}
 
 email_enabled() {
   [[ -n "${SMTP_HOST:-}" && -n "${SMTP_FROM:-}" && -n "${SMTP_TO:-}" ]]
@@ -107,10 +119,6 @@ telegram_enabled() {
 
 sms_enabled() {
   [[ -n "${TWILIO_ACCOUNT_SID:-}" && -n "${TWILIO_AUTH_TOKEN:-}" && -n "${TWILIO_FROM:-}" && -n "${SMS_TO:-}" ]]
-}
-
-any_channel() {
-  email_enabled || telegram_enabled || sms_enabled
 }
 
 format_elapsed() {
@@ -139,8 +147,15 @@ collect_facts() {
     PUBLIC_IP=$(printf '%s' "$PUBLIC_IP" | tr -d '[:space:]')
     [[ -n "$PUBLIC_IP" ]] || PUBLIC_IP=unknown
   fi
-  if [[ -r /proc/uptime ]]; then
-    UPTIME_SEC=${UPTIME_SEC:-$(cut -d. -f1 /proc/uptime)}
+  if [[ -n "${WAKEUP_UPTIME_FILE:-}" && -r "$WAKEUP_UPTIME_FILE" ]]; then
+    UPTIME_SEC=$(cut -d. -f1 "$WAKEUP_UPTIME_FILE")
+    if [[ "$UPTIME_SEC" =~ ^[0-9]+$ ]]; then
+      UPTIME_VAL=$(format_elapsed "$UPTIME_SEC")
+    else
+      UPTIME_VAL=unknown
+    fi
+  elif [[ -r /proc/uptime ]]; then
+    UPTIME_SEC=$(cut -d. -f1 /proc/uptime)
     UPTIME_VAL=$(format_elapsed "$UPTIME_SEC")
   else
     UPTIME_VAL=$(uptime -p 2>/dev/null || echo unknown)
@@ -211,15 +226,23 @@ send_one() {
   local label=$1
   shift
   local out=""
+  local sanitized=""
   local rc=0
   set +e
   out=$("$@" 2>&1)
   rc=$?
   set -e
+  if ! sanitized=$(
+    printf '%s' "$out" |
+      "$PYTHON" "$SCRIPT_DIR/sanitize_output.py" \
+        --env "$ENV_FILE" --limit "$ERROR_DETAIL_MAX_CHARS"
+  ); then
+    sanitized="[provider output could not be sanitized]"
+  fi
   if [[ "$rc" -eq 0 ]]; then
-    log "$label: $out"
+    log "$label: $sanitized"
   else
-    log "WARNING: $label failed (rc=$rc): $out"
+    log "WARNING: $label failed (rc=$rc): $sanitized"
   fi
 }
 
@@ -230,13 +253,19 @@ send_channels() {
     return 0
   fi
   if telegram_enabled; then
-    send_one "telegram $kind" "$SCRIPT_DIR/send_telegram.sh" "$ENV_FILE" "$RUNTIME_DIR/${kind}-telegram.txt"
+    send_one "telegram $kind" \
+      "${WAKEUP_SEND_TELEGRAM:-$SCRIPT_DIR/send_telegram.sh}" \
+      "$ENV_FILE" "$RUNTIME_DIR/${kind}-telegram.txt"
   fi
   if email_enabled; then
-    send_one "email $kind" "$SCRIPT_DIR/send_email_from_template.sh" "$ENV_FILE" "$RUNTIME_DIR/${kind}-email.txt"
+    send_one "email $kind" \
+      "${WAKEUP_SEND_EMAIL:-$SCRIPT_DIR/send_email_from_template.sh}" \
+      "$ENV_FILE" "$RUNTIME_DIR/${kind}-email.txt"
   fi
   if sms_enabled; then
-    send_one "sms $kind" "$SCRIPT_DIR/send_sms.sh" "$ENV_FILE" "$RUNTIME_DIR/${kind}-sms.txt"
+    send_one "sms $kind" \
+      "${WAKEUP_SEND_SMS:-$SCRIPT_DIR/send_sms.sh}" \
+      "$ENV_FILE" "$RUNTIME_DIR/${kind}-sms.txt"
   fi
 }
 
@@ -265,10 +294,6 @@ notify_kind() {
   render_kind "$kind"
   send_channels "$kind"
 }
-
-if ! any_channel && [[ "$DRY_RUN" -eq 0 ]]; then
-  log "ERROR: no notification channel configured. Set SMTP_* and/or TELEGRAM_* and/or TWILIO_* in $ENV_FILE"
-fi
 
 if [[ "$KEEP_ACK" -eq 0 ]]; then
   if [[ -f "$ACK_FILE" ]]; then

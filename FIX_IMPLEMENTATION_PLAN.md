@@ -66,7 +66,7 @@ in-instance notifier has a trustworthy baseline.
 - [x] Choose and install a real SPDX license.
 - [x] Replace executable-template placeholders and obsolete HomeLAN language.
 - [x] Update GitHub Actions to a currently supported checkout action.
-- [ ] Add a CI badge only after the workflow is green (deferred until the
+- [x] Add a CI badge only after the workflow is green (deferred until the
   updated workflow runs on GitHub).
 
 ### Phase 0 files
@@ -94,12 +94,12 @@ in-instance notifier has a trustworthy baseline.
 
 ### Phase 1 checklist
 
-- [ ] Make `wakeup.sh` the sole owner of daemon application log writes.
-- [ ] Refresh uptime and other dynamic facts for every rendered message.
-- [ ] Centralize configuration parsing and precedence across all commands.
-- [ ] Validate configuration before changing lifecycle state.
-- [ ] Bound, rotate, truncate, and sanitize persistent logs.
-- [ ] Add regression tests for every Phase 1 defect.
+- [x] Make `wakeup.sh` the sole owner of daemon application log writes.
+- [x] Refresh uptime and other dynamic facts for every rendered message.
+- [x] Centralize configuration parsing and precedence across all commands.
+- [x] Validate configuration before changing lifecycle state.
+- [x] Bound, rotate, truncate, and sanitize persistent logs.
+- [x] Add regression tests for every Phase 1 defect.
 
 ### 1. Make one component own daemon logging
 

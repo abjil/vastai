@@ -46,9 +46,10 @@ chmod 600 /workspace/vastai-wakeup/wakeup.env
 Configure at least one complete channel. Telegram is usually the most reliable
 from a GPU datacenter IP. See [CHANNELS.md](CHANNELS.md).
 
-Review path settings carefully. Until the configuration-precedence fixes are
-implemented, prefer the default `DATA_DIR` and `ACK_FILE` values so
-`wakeup.sh`, `ack.sh`, and login auto-ack cannot disagree.
+Command-line options take precedence over documented operational environment
+overrides, followed by `wakeup.env` and built-in defaults. Operational
+overrides cover paths, timing, instance name, dry-run, and timeouts.
+Credentials and recipients remain file-only.
 
 ## 3. Run offline and channel checks
 
@@ -133,11 +134,12 @@ snippet with `touch ~/.no_login_ack` or remove the marked block from
 | Env file | `$DATA_DIR/wakeup.env` |
 | ACK | `$DATA_DIR/ACK` |
 | PID | `$DATA_DIR/wakeup.pid` |
-| Log | `$DATA_DIR/wakeup.log` |
+| Application log | `$DATA_DIR/wakeup.log` |
+| Mirrored stdout/stderr | `$DATA_DIR/wakeup-error.log` |
 | Rendered runtime data | `$DATA_DIR/runtime/` |
 
-Path overrides are supported by design, but should be used only after the
-precedence tests in the implementation plan pass.
+Both persistent logs rotate at 1 MiB and retain three numbered backups by
+default. Override the policy with `LOG_MAX_BYTES` and `LOG_BACKUP_COUNT`.
 
 ## Updating
 

@@ -36,11 +36,13 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
-from envutil import parse_env, split_list
+from envutil import load_config, sanitize_detail, split_list
 
-env = parse_env(Path(sys.argv[2]))
+env = load_config(Path(sys.argv[2]))
 token = env.get("TELEGRAM_BOT_TOKEN", "").strip()
 chat_ids = split_list(env.get("TELEGRAM_CHAT_ID", ""))
+timeout = int(env["CHANNEL_TIMEOUT_SEC"])
+detail_limit = int(env["ERROR_DETAIL_MAX_CHARS"])
 text = Path(sys.argv[3]).read_text(encoding="utf-8", errors="replace").strip()
 if len(text) > 4000:
     text = text[:3990] + "\n…"
@@ -58,17 +60,20 @@ for chat_id in chat_ids:
     ).encode("utf-8")
     req = urllib.request.Request(url, data=body, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
+        detail = exc.read(detail_limit + 1).decode("utf-8", errors="replace")
+        detail = sanitize_detail(detail, secrets=[token], limit=detail_limit)
         errors.append(f"{chat_id}: HTTP {exc.code} {detail}")
         continue
     except Exception as exc:
-        errors.append(f"{chat_id}: {exc}")
+        detail = sanitize_detail(str(exc), secrets=[token], limit=detail_limit)
+        errors.append(f"{chat_id}: {detail}")
         continue
     if not payload.get("ok"):
-        errors.append(f"{chat_id}: {payload}")
+        detail = sanitize_detail(str(payload), secrets=[token], limit=detail_limit)
+        errors.append(f"{chat_id}: {detail}")
         continue
     print(f"Telegram sent to chat {chat_id}")
 
