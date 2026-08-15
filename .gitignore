@@ -1,8 +1,12 @@
 wakeup.env
 .env
 ACK
+session.id
+acked.session
 wakeup.log
+wakeup-error.log
 wakeup.pid
+wakeup.lock/
 started_at
 runtime/
 *.swp

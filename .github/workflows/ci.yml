@@ -7,7 +7,34 @@ on:
 jobs:
   selftest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10"]
     steps:
       - uses: actions/checkout@v7
-      - name: Run selftest
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run offline selftest
+        env:
+          http_proxy: http://127.0.0.1:9
+          https_proxy: http://127.0.0.1:9
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+          no_proxy: 127.0.0.1,localhost
+          NO_PROXY: 127.0.0.1,localhost
         run: bash bin/selftest.sh
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Lint shell scripts
+        run: |
+          shellcheck --severity=warning -x \
+            bin/*.sh \
+            tests/*.sh \
+            templates/onstart.vastai.sh

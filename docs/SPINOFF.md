@@ -36,7 +36,7 @@ The installation directory intentionally keeps the descriptive
 ## Files that must never be published
 
 - populated `wakeup.env` or other credential files;
-- `ACK`, `session.id`, `started_at`, `wakeup.pid`, or lock state;
+- `ACK`, `session.id`, `acked.session`, `started_at`, `wakeup.pid`, or lock state;
 - `wakeup.log` and `runtime/`;
 - editor/agent context or private HomeLAN configuration;
 - Python bytecode and cache directories.

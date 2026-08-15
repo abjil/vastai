@@ -31,16 +31,20 @@ def main() -> int:
     if not path.is_file():
         print(f"ERROR: ENV_FILE '{path}' not found.", file=sys.stderr)
         return 66
+    warnings: list[str] = []
     try:
         config = load_config(
             path,
             root_dir=Path(args.root) if args.root else None,
             require_channel=args.require_channel,
             dry_run=args.dry_run,
+            warnings=warnings,
         )
     except (ConfigError, OSError) as exc:
         print(f"ERROR: invalid configuration: {exc}", file=sys.stderr)
         return 78
+    for warning in warnings:
+        print(f"WARNING: {warning}", file=sys.stderr)
     sys.stdout.write(shell_exports(config))
     return 0
 

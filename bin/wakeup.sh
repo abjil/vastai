@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# wakeup.sh — nag until ACK appears on this Vast.ai instance boot
+# wakeup.sh — nag until ACK matches this container session
 #
 # Usage:
 #   wakeup.sh [--once] [--dry-run] [--test-channels] [--keep-ack]
@@ -26,11 +26,11 @@ usage() {
   cat <<'EOF'
 Usage: wakeup.sh [options]
 
-  --once           Send one alert (or acked message if ACK exists) and exit
+  --once           Send one alert (or acked message if ACK matches) and exit
   --dry-run        Render messages; do not send
-  --test-channels  One live send on each configured channel; do not delete ACK
+  --test-channels  One live send on each configured channel
                    Cannot be combined with --dry-run. Overrides WAKEUP_DRY_RUN.
-  --keep-ack       Do not delete a leftover ACK at start
+  --keep-ack       Compatibility: treat an empty legacy ACK file as valid
 EOF
 }
 
@@ -69,7 +69,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   config_args+=(--dry-run)
 fi
 CONFIG_OUTPUT=$("$PYTHON" "$SCRIPT_DIR/dump_env_shell.py" "${config_args[@]}") || exit $?
-eval "$CONFIG_OUTPUT"
+eval_shell_exports "$CONFIG_OUTPUT"
 
 ONCE=$CLI_ONCE
 KEEP_ACK=$CLI_KEEP_ACK
@@ -93,6 +93,9 @@ TEMPLATE_DIR="$WAKEUP_TEMPLATES"
 if ! ensure_writable_dir "$DATA_DIR" ||
    ! ensure_writable_dir "$RUNTIME_DIR" ||
    ! ensure_writable_parent "$ACK_FILE" ||
+   ! ensure_writable_parent "$SESSION_ID_FILE" ||
+   ! ensure_writable_parent "$ACKED_SESSION_FILE" ||
+   ! ensure_writable_parent "$WAKEUP_LOCK" ||
    ! ensure_writable_path "$LOG_FILE" ||
    ! ensure_writable_path "$ERROR_LOG_FILE" ||
    ! ensure_writable_path "$PID_FILE" ||
@@ -121,6 +124,43 @@ sms_enabled() {
   [[ -n "${TWILIO_ACCOUNT_SID:-}" && -n "${TWILIO_AUTH_TOKEN:-}" && -n "${TWILIO_FROM:-}" && -n "${SMS_TO:-}" ]]
 }
 
+resolve_public_ip() {
+  PUBLIC_IP=unknown
+  if [[ -n "${WAKEUP_PUBLIC_IP:-}" ]]; then
+    PUBLIC_IP=$(printf '%s' "$WAKEUP_PUBLIC_IP" | tr -d '[:space:]')
+    [[ -n "$PUBLIC_IP" ]] || PUBLIC_IP=unknown
+    return
+  fi
+  if [[ ! "${PUBLIC_IP_LOOKUP:-0}" =~ ^(1|yes|true|on)$ ]]; then
+    return
+  fi
+  local cache="${PUBLIC_IP_CACHE_FILE:-$RUNTIME_DIR/public_ip}"
+  if [[ -r "$cache" ]]; then
+    PUBLIC_IP=$(tr -d '[:space:]' < "$cache" || true)
+    [[ -n "$PUBLIC_IP" ]] || PUBLIC_IP=unknown
+    return
+  fi
+  local raw=""
+  if [[ -n "${WAKEUP_PUBLIC_IP_CMD:-}" ]]; then
+    raw=$("$WAKEUP_PUBLIC_IP_CMD" 2>/dev/null || true)
+  elif [[ "$DRY_RUN" -eq 0 || -n "${WAKEUP_PUBLIC_IP_URLS:-}" ]]; then
+    local url
+    local -a url_list
+    read -r -a url_list <<< "${WAKEUP_PUBLIC_IP_URLS:-https://ifconfig.me/ip https://icanhazip.com}"
+    for url in "${url_list[@]}"; do
+      raw=$(curl -4 -fsS --max-time 5 "$url" 2>/dev/null || true)
+      raw=$(printf '%s' "$raw" | tr -d '[:space:]')
+      if [[ -n "$raw" ]]; then
+        break
+      fi
+    done
+  fi
+  PUBLIC_IP=$(printf '%s' "$raw" | tr -d '[:space:]')
+  [[ -n "$PUBLIC_IP" ]] || PUBLIC_IP=unknown
+  mkdir -p "$(dirname "$cache")"
+  printf '%s\n' "$PUBLIC_IP" > "$cache" || true
+}
+
 format_elapsed() {
   local total=$1
   local h=$((total / 3600))
@@ -138,15 +178,7 @@ collect_facts() {
     VAST_LABEL=$(tr -d '\r\n' < "${HOME:-/root}/.vast_containerlabel")
   fi
   [[ -n "$VAST_LABEL" ]] || VAST_LABEL=unknown
-  PUBLIC_IP=unknown
-  if [[ "$DRY_RUN" -eq 0 ]]; then
-    PUBLIC_IP=$(curl -4 -fsS --max-time 5 https://ifconfig.me/ip 2>/dev/null || true)
-    if [[ -z "$PUBLIC_IP" ]]; then
-      PUBLIC_IP=$(curl -4 -fsS --max-time 5 https://icanhazip.com 2>/dev/null || true)
-    fi
-    PUBLIC_IP=$(printf '%s' "$PUBLIC_IP" | tr -d '[:space:]')
-    [[ -n "$PUBLIC_IP" ]] || PUBLIC_IP=unknown
-  fi
+  resolve_public_ip
   if [[ -n "${WAKEUP_UPTIME_FILE:-}" && -r "$WAKEUP_UPTIME_FILE" ]]; then
     UPTIME_SEC=$(cut -d. -f1 "$WAKEUP_UPTIME_FILE")
     if [[ "$UPTIME_SEC" =~ ^[0-9]+$ ]]; then
@@ -176,7 +208,7 @@ collect_facts() {
   fi
   ELAPSED_VAL=$(format_elapsed "$elapsed")
   STARTED_AT_VAL=$(date -u -d "@${started}" +'%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || echo unknown)
-  ACK_HINT="touch ${ACK_FILE}"
+  ACK_HINT="${SCRIPT_DIR}/ack.sh"
   KIND_VAL=$kind
   ALERT_NUM_VAL=$alert_num
 }
@@ -269,11 +301,38 @@ send_channels() {
   fi
 }
 
+SESSION_CLI_ARGS=()
+if [[ -n "${WAKEUP_SESSION_ID:-}" ]]; then
+  SESSION_CLI_ARGS+=(--session "$WAKEUP_SESSION_ID")
+fi
+if [[ -n "${WAKEUP_SESSION_PROC:-}" ]]; then
+  SESSION_CLI_ARGS+=(--proc-root "$WAKEUP_SESSION_PROC")
+fi
+if [[ -n "${WAKEUP_SESSION_FALLBACK_DIR:-}" ]]; then
+  SESSION_CLI_ARGS+=(--fallback-dir "$WAKEUP_SESSION_FALLBACK_DIR")
+fi
+
+ack_is_valid() {
+  local extra=()
+  if [[ "$KEEP_ACK" -eq 1 ]] || [[ "${WAKEUP_LEGACY_EMPTY_ACK:-0}" =~ ^(1|yes|true|on)$ ]]; then
+    extra+=(--legacy-empty)
+  fi
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" ack-matches "$ACK_FILE" "$SESSION_ID" "${extra[@]}"
+}
+
+already_acked_session() {
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" already-acked "$ACKED_SESSION_FILE" "$SESSION_ID"
+}
+
+mark_session_acked() {
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" mark-acked "$ACKED_SESSION_FILE" "$SESSION_ID"
+}
+
 sleep_checking_ack() {
   local remaining=$1
   local chunk
   while [[ "$remaining" -gt 0 ]]; do
-    if [[ -f "$ACK_FILE" ]]; then
+    if ack_is_valid; then
       return 0
     fi
     chunk=$ACK_POLL_SEC
@@ -295,19 +354,30 @@ notify_kind() {
   send_channels "$kind"
 }
 
-if [[ "$KEEP_ACK" -eq 0 ]]; then
-  if [[ -f "$ACK_FILE" ]]; then
-    log "removing leftover ACK from a previous session: $ACK_FILE"
-    rm -f "$ACK_FILE"
-  fi
-fi
-
-date +%s > "$STARTED_AT_FILE"
-echo $$ > "$PID_FILE"
+SESSION_ID=$(
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" ensure "$SESSION_ID_FILE" \
+    "${SESSION_CLI_ARGS[@]}"
+) || exit 1
+PID_STARTTIME=""
 cleanup() {
-  rm -f "$PID_FILE"
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" clear-pid "$PID_FILE" \
+    --pid $$ --starttime "$PID_STARTTIME" >/dev/null || true
 }
 trap cleanup EXIT
+"$PYTHON" "$SCRIPT_DIR/session_id.py" write "$STARTED_AT_FILE" "$(date +%s)"
+"$PYTHON" "$SCRIPT_DIR/session_id.py" write-pid "$PID_FILE" \
+  --pid $$ \
+  --script "$SCRIPT_DIR/wakeup.sh" \
+  "${SESSION_CLI_ARGS[@]}"
+PID_STARTTIME=$(
+  "$PYTHON" "$SCRIPT_DIR/session_id.py" read-pid "$PID_FILE" --field starttime
+) || PID_STARTTIME=""
+
+if ack_is_valid; then
+  log "ACK matches current session $SESSION_ID"
+elif [[ -f "$ACK_FILE" ]]; then
+  log "ignoring ACK that does not match session $SESSION_ID"
+fi
 
 tg_on=no
 em_on=no
@@ -315,16 +385,21 @@ sms_on=no
 telegram_enabled && tg_on=yes
 email_enabled && em_on=yes
 sms_enabled && sms_on=yes
-log "wakeup started pid=$$ instance=${INSTANCE_NAME} data=$DATA_DIR dry_run=$DRY_RUN"
+log "wakeup started pid=$$ session=$SESSION_ID instance=${INSTANCE_NAME} data=$DATA_DIR dry_run=$DRY_RUN"
 log "channels: telegram=$tg_on email=$em_on sms=$sms_on"
 
 ALERT_NUM=0
 INTERVAL=$INTERVAL_SEC
 
 while true; do
-  if [[ -f "$ACK_FILE" ]]; then
-    log "ACK present at $ACK_FILE — sending final message and exiting"
+  if ack_is_valid; then
+    if already_acked_session; then
+      log "session $SESSION_ID already acknowledged; exiting without resending"
+      exit 0
+    fi
+    log "ACK matches session $SESSION_ID — sending final message and exiting"
     notify_kind acked "$ALERT_NUM"
+    mark_session_acked
     log "acked after $ALERT_NUM alert(s); exiting"
     exit 0
   fi

@@ -54,7 +54,8 @@ if not text:
 
 errors = []
 for chat_id in chat_ids:
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    api_base = env.get("TELEGRAM_API_BASE", "https://api.telegram.org").rstrip("/")
+    url = f"{api_base}/bot{token}/sendMessage"
     body = urllib.parse.urlencode(
         {"chat_id": chat_id, "text": text, "disable_web_page_preview": "true"}
     ).encode("utf-8")

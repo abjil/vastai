@@ -188,12 +188,12 @@ daemon, or entering the loop.
 
 ### Phase 2 checklist
 
-- [ ] Implement and test a stable container-session identity.
-- [ ] Bind ACK content and final acknowledgment to the current session.
-- [ ] Serialize startup with an atomic lock.
-- [ ] Store and verify process identity before signaling a PID.
-- [ ] Make PID/lock cleanup conditional on state ownership.
-- [ ] Test sequential, concurrent, stale-PID, and restart scenarios.
+- [x] Implement and test a stable container-session identity.
+- [x] Bind ACK content and final acknowledgment to the current session.
+- [x] Serialize startup with an atomic lock.
+- [x] Store and verify process identity before signaling a PID.
+- [x] Make PID/lock cleanup conditional on state ownership.
+- [x] Test sequential, concurrent, stale-PID, and restart scenarios.
 
 ### 1. Introduce a container-session identity
 
@@ -273,12 +273,12 @@ PID.
 
 ### Phase 3 checklist
 
-- [ ] Allowlist configuration keys exported to Bash.
-- [ ] Detect unsafe `wakeup.env` permissions before loading credentials.
-- [ ] Make public-IP discovery optional and bounded.
-- [ ] Require a pinned, reviewed deployment revision.
-- [ ] Make SSH auto-ack behavior explicit, safe, and reversible.
-- [ ] Add security regression tests for each control.
+- [x] Allowlist configuration keys exported to Bash.
+- [x] Detect unsafe `wakeup.env` permissions before loading credentials.
+- [x] Make public-IP discovery optional and bounded.
+- [x] Require a pinned, reviewed deployment revision.
+- [x] Make SSH auto-ack behavior explicit, safe, and reversible.
+- [x] Add security regression tests for each control.
 
 ### 1. Allowlist configuration keys
 
@@ -333,12 +333,12 @@ PID.
 
 ### Phase 4 checklist
 
-- [ ] Create focused offline tests under `tests/` while retaining selftest entry.
-- [ ] Cover configuration, templates, loop behavior, ACK, and lifecycle state.
-- [ ] Mock every notification provider and public-IP request.
-- [ ] Add clean-checkout, timeout, concurrency, and log-sanitization tests.
-- [ ] Add the supported Python versions and optional ShellCheck to CI.
-- [ ] Confirm CI makes no external network calls and requires no credentials.
+- [x] Create focused offline tests under `tests/` while retaining selftest entry.
+- [x] Cover configuration, templates, loop behavior, ACK, and lifecycle state.
+- [x] Mock every notification provider and public-IP request.
+- [x] Add clean-checkout, timeout, concurrency, and log-sanitization tests.
+- [x] Add the supported Python versions and optional ShellCheck to CI.
+- [x] Confirm CI makes no external network calls and requires no credentials.
 
 ### Test structure
 

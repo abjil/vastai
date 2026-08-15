@@ -28,6 +28,11 @@ def main() -> int:
     parser.add_argument("output")
     parser.add_argument("--env", action="append", default=[], help="KEY=VALUE env file (repeatable)")
     parser.add_argument("assignments", nargs="*", help="KEY=VALUE overrides")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="fail when the rendered text still contains {{PLACEHOLDER}} tokens",
+    )
     args = parser.parse_args()
 
     mapping: dict[str, str] = {}
@@ -44,7 +49,16 @@ def main() -> int:
     dest = Path(args.output)
     text = src.read_text(encoding="utf-8")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(render(text, mapping), encoding="utf-8")
+    rendered = render(text, mapping)
+    dest.write_text(rendered, encoding="utf-8")
+    if args.strict:
+        leftover = sorted(set(_TOKEN.findall(rendered)))
+        if leftover:
+            print(
+                "ERROR: unresolved placeholders: " + ", ".join(leftover),
+                file=sys.stderr,
+            )
+            return 65
     return 0
 
 

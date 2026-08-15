@@ -32,9 +32,8 @@ tracked file as world-readable.
 
 - Do not place credentials in the Vast.ai onstart field, repository URL,
   command-line arguments, logs, or message templates.
-- The current implementation documents mode `0600` but does not enforce it.
-  Enforcement is a release-blocking item in
-  [FIX_IMPLEMENTATION_PLAN.md](../FIX_IMPLEMENTATION_PLAN.md).
+- On Linux, startup rejects a secret-bearing `wakeup.env` that is readable by
+  group or others. It does not chmod or chown the file for you.
 
 Anyone who can read the persistent workspace may also read rendered messages
 under `runtime/` and the operational log. Those files contain instance
@@ -47,8 +46,9 @@ applies validation and precedence across `wakeup.sh`, `ack.sh`, login-ack
 installation, and every channel adapter. Values are shell-quoted before Bash
 evaluates generated assignments, which prevents direct value injection.
 
-The current loader still accepts arbitrary valid variable names and could
-overwrite `PATH`, `HOME`, or `PYTHONPATH`. Phase 3 adds an export allowlist.
+Only documented configuration keys are exported to Bash. Unknown keys produce a
+warning. Reserved names such as `PATH`, `HOME`, and `PYTHONPATH` are rejected
+before any assignment is evaluated.
 
 Do not add shell commands, command substitutions, or unrelated environment
 variables to `wakeup.env`.
@@ -61,9 +61,9 @@ variables to `wakeup.env`.
 - Messages may contain hostname, container label, public IP, and ACK
   instructions. Send them only to private email recipients, Telegram chats, and
   phone numbers.
-- Public-IP discovery currently contacts `ifconfig.me` and
-  `icanhazip.com`. This discloses an instance request to those providers on each
-  alert cycle. The target design makes this lookup optional.
+- Public-IP discovery is off by default. When `PUBLIC_IP_LOOKUP=1`, the
+  notifier contacts `ifconfig.me` and, if needed, `icanhazip.com` once per
+  session. This discloses an instance request to those providers.
 - Provider error responses can contain account or recipient metadata. Logged
   detail is credential-redacted, including URL-encoded and Base64 forms such as
   Twilio Basic auth, and limited to 2 KiB by default.
@@ -76,7 +76,7 @@ credentials. Do not automatically execute an unreviewed moving branch.
 For production use:
 
 1. Review the release or commit.
-2. Pin the onstart deployment to that tag or commit.
+2. Set `WAKEUP_REVISION` to that tag or commit in the Vast.ai onstart field.
 3. Update deliberately after reviewing changes.
 4. Avoid `git pull ... || true`, which can silently retain stale code.
 
@@ -88,14 +88,18 @@ high-assurance release may pin third-party actions by commit SHA.
 ACK state controls whether billing alerts continue. Protect the data directory
 from untrusted users.
 
-`install-login-ack.sh` is optional. Its trigger is the presence of
-`SSH_CONNECTION`; therefore any qualifying SSH login—including automation or a
-different trusted operator—can silence alerts. Enable it only when that
-behavior matches the instance's access model. The `~/.no_login_ack` opt-out
-does not replace careful installation.
+`install-login-ack.sh` is optional. Installation prints the trigger
+(`SSH_CONNECTION`) and the risk that any matching SSH login—including
+automation or a different trusted operator—can silence alerts. Enable it only
+when that behavior matches the instance's access model.
 
-The target session-bound ACK design prevents stale state from acknowledging a
-later container session.
+Temporary disable: `touch ~/.no_login_ack`.  
+Uninstall: `bin/install-login-ack.sh --uninstall`.
+
+ACK is valid only when its content equals the current `session.id` token.
+Restarting the notifier in the same container session keeps a matching ACK;
+a later stop/start derives a new token, so leftover ACK files do not silence
+alerts.
 
 ## Credential rotation
 

@@ -1,6 +1,23 @@
 # Shared helpers. Source from other scripts in this directory.
 # shellcheck shell=bash
 
+eval_shell_exports() {
+  local output=$1
+  local line
+  local assignments=""
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[A-Za-z_][A-Za-z0-9_]+= ]]; then
+      assignments+="$line"$'\n'
+    elif [[ -n "$line" ]]; then
+      printf '%s\n' "$line" >&2
+    fi
+  done <<< "$output"
+  # Assignments are KEY=VALUE lines only; reserved names are rejected earlier.
+  # shellcheck disable=SC2294
+  eval "$assignments"
+}
+
 resolve_python() {
   local c
   for c in python3 python; do

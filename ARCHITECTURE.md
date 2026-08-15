@@ -60,10 +60,10 @@ alert loop.
 
 ### Separate session identity from process identity
 
-**Target:** an acknowledgment belongs to a billed container session, while a
-PID belongs only to one notifier process. Restarting the process must not erase
-an ACK for the same session; starting a later container session must not reuse
-the earlier ACK.
+An acknowledgment belongs to a billed container session, while a PID belongs
+only to one notifier process. Restarting the process does not erase an ACK for
+the same session; starting a later container session does not reuse the earlier
+ACK.
 
 ## Technology choices
 
@@ -81,9 +81,11 @@ the earlier ACK.
 
 | Component | Responsibility |
 | --- | --- |
-| `templates/onstart.vastai.sh` | Minimal Vast.ai UI bootstrap; select a reviewed source revision and invoke local startup |
+| `templates/onstart.vastai.sh` | Vast.ai UI bootstrap; require `WAKEUP_REVISION`, pin that checkout, then invoke local startup |
+| `bin/pin_revision.sh` | Fetch and detach a reviewed revision, or fail closed |
 | `bin/onstart.sh` | Validate startup inputs, coordinate one daemon, and launch it |
 | `bin/wakeup.sh` | Session/ACK lifecycle, backoff, fact collection, rendering, and channel orchestration |
+| `bin/session_id.py` | Session token, process identity, startup lock, and atomic state writes |
 | `bin/envutil.py` | Canonical configuration parser and validation primitives |
 | `bin/dump_env_shell.py` | Export an allowlisted subset of parsed configuration for Bash |
 | `bin/render_template.py` | Replace `{{PLACEHOLDER}}` values in message templates |
@@ -105,11 +107,12 @@ Default `DATA_DIR=/workspace/vastai-wakeup`:
 /workspace/vastai-wakeup/
 ├── bin/ … templates/ …          source checkout
 ├── wakeup.env                   secrets; owner-readable only
-├── session.id                   target: current container session identity
-├── ACK                          target: acknowledged session identity
+├── session.id                   current container session identity
+├── ACK                          acknowledged session identity
+├── acked.session                session that already received the final message
 ├── started_at                   notifier start timestamp
 ├── wakeup.pid                   process identity
-├── wakeup.lock/                 target: startup exclusion
+├── wakeup.lock/                 startup exclusion
 ├── wakeup.log                   bounded persistent log
 └── runtime/
       ├── facts.env
@@ -121,53 +124,44 @@ operationally useful but sensitive and must not be committed.
 
 ### Session and ACK invariant
 
-**Current behavior:** `wakeup.sh` deletes any `ACK` whenever it starts unless
-`--keep-ack` is used. This prevents a stale ACK from muting a later boot, but it
-also revokes acknowledgment when the notifier is restarted within one boot.
-
-**Target behavior:**
-
-1. Derive or create a stable session identifier for the running container.
+1. Derive a stable session identifier from the host boot ID, PID-namespace
+   identity, and PID 1 start time. If those inputs are unavailable, create an
+   atomic random identifier under `/run/vastai-wakeup` (then `/tmp`).
 2. Store the identifier in `session.id`.
-3. `ack.sh` writes that identifier to `ACK`.
+3. `ack.sh` atomically writes that identifier to `ACK`.
 4. The loop is acknowledged only when `ACK` matches `session.id`.
 5. A new container session changes `session.id`, making old ACK content stale
-   without deleting evidence during every process restart.
+   without deleting evidence during a process restart.
+6. The final acknowledgment message is sent at most once per session, recorded
+   in `acked.session`.
 
-The session source must be verified on the supported Vast.ai image. Preferred
-inputs are a stable container/boot identifier, with an atomically-created local
-identifier as a documented fallback.
+Empty legacy ACK files are stale unless `--keep-ack` or
+`WAKEUP_LEGACY_EMPTY_ACK=1` is set. Direct file creation remains valid when the
+file contains the current session token.
+
+`WAKEUP_SESSION_ID` may inject a token for tests. The derived fingerprint
+should be confirmed on a real Vast.ai stop/start before a tagged v1 release.
 
 ## Startup and process coordination
 
-### Current sequence
+### Startup sequence
 
 1. `templates/onstart.vastai.sh` invokes `bin/onstart.sh`.
-2. `onstart.sh` verifies `wakeup.env`, applies executable bits, checks a PID
-   file, sends `TERM` to that PID when it exists, and starts `wakeup.sh` through
-   `nohup`.
-3. `wakeup.sh` loads configuration, deletes `ACK`, writes PID/start files, and
-   enters the alert loop.
+2. `onstart.sh` validates configuration before changing lifecycle state.
+3. It acquires an atomic `mkdir` startup lock and stores lock metadata.
+4. If a PID file exists, it verifies liveness, start time, command path, and
+   session relationship before signaling.
+5. If the correct daemon is already healthy for this session, it returns
+   success without replacing it.
+6. Otherwise it terminates only that verified process, waits with a bound, and
+   escalates only to that process when necessary.
+7. It starts the daemon, which atomically publishes PID plus start time and
+   session token, then confirms the process remains alive.
+8. It releases the startup lock.
 
-This sequence has known races: PID reuse can target an unrelated process, two
-startups can overlap, and a terminating old process can remove a newer PID
-file.
-
-### Target sequence
-
-1. Acquire an atomic startup lock.
-2. Parse and validate configuration before changing running state.
-3. If a PID file exists, verify both liveness and process ownership.
-4. If the correct daemon is already healthy for this session, return success
-   without restarting it.
-5. Otherwise terminate it, wait with a bound, and escalate only to that
-   verified process when necessary.
-6. Start the daemon and atomically publish its PID.
-7. Confirm it remains alive long enough to report startup success.
-8. Release the startup lock.
-
-A trap may remove a PID file only when the file still contains the exiting
-process's PID.
+A trap removes a PID file only when the file still describes the exiting
+process. A stale lock is recovered only after its holder is verified dead or
+replaced.
 
 ## Configuration model
 
@@ -186,10 +180,10 @@ The shared Python parser now supplies effective configuration to the main loop,
 ACK tools, and all channel adapters. Credentials and recipients are not
 process-overridable.
 
-Unknown keys are still accepted in the file, but only documented configuration
-keys are exported into Bash. Reserved names such as `DRY_RUN`, `ONCE`, `PATH`,
-`HOME`, and `PYTHONPATH` are never exported. Phase 3 will add unknown-key
-warnings.
+Unknown keys produce a warning and are not exported. Reserved names such as
+`PATH`, `HOME`, `PYTHONPATH`, and CLI flags are rejected. Only allowlisted
+keys are written as `shlex.quote`d assignments, and Bash evaluates those
+assignment lines only.
 
 ### Implemented validation
 
@@ -203,7 +197,9 @@ Before lifecycle state changes, startup validates:
 - at least one usable channel for normal operation.
 
 Dry-run rendering may operate without live credentials.
-Owner-only permission enforcement for `wakeup.env` remains Phase 3 work.
+On Linux, a secret-bearing `wakeup.env` that is group- or other-readable is
+rejected before credentials are exported. The example file and credential-free
+fixtures are exempt. Ownership is not silently repaired.
 
 ## Alert control flow
 
@@ -241,7 +237,9 @@ ACK prevents a new cycle but does not cancel an already-running network call.
 - Configuration failures stop startup with a non-zero exit and a specific
   operator-facing message.
 - Channel failures are logged and do not terminate the loop.
-- Public-IP lookup failure yields `unknown`; it does not block notifications.
+- Public-IP lookup is off by default (`PUBLIC_IP_LOOKUP=0`). When enabled it
+  runs once per session and is cached; failure yields `unknown` and does not
+  block notifications.
 - Facts such as uptime are recomputed for every alert.
 - `wakeup.sh` owns daemon log writes. The launcher redirects only unexpected
   bootstrap output, avoiding duplicate records.
@@ -257,14 +255,14 @@ is optional unless field testing shows crashes are a material risk.
 ## Security boundaries
 
 - The public repository is untrusted input until a revision is reviewed.
-  Deployment should pin a release, tag, or commit instead of pulling a moving
-  branch on every boot.
+  Vast.ai onstart requires `WAKEUP_REVISION` and fails if that revision cannot
+  be fetched and detached.
 - `wakeup.env`, rendered messages, and logs are trusted-operator files on a
   persistent disk; they are not encrypted at rest.
 - Anyone with root access inside the instance can read credentials. This tool
   does not defend against a compromised container.
-- Public-IP lookup discloses the instance's request to a third party and must be
-  optional.
+- Public-IP lookup discloses the instance's request to a third party and is
+  disabled unless `PUBLIC_IP_LOOKUP=1`.
 - SSH auto-ack is opt-in because automated or unintended SSH sessions also set
   `SSH_CONNECTION`.
 
@@ -286,6 +284,7 @@ vastai/
 │   ├── SECURITY.md
 │   └── SPINOFF.md
 ├── bin/
+├── tests/
 └── templates/
 ```
 

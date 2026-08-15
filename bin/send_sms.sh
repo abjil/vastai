@@ -64,7 +64,8 @@ if not text:
     raise SystemExit("ERROR: message file is empty.")
 
 auth = base64.b64encode(f"{sid}:{token}".encode("utf-8")).decode("ascii")
-url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+api_base = env.get("TWILIO_API_BASE", "https://api.twilio.com").rstrip("/")
+url = f"{api_base}/2010-04-01/Accounts/{sid}/Messages.json"
 errors = []
 for to in to_list:
     body = urllib.parse.urlencode({"From": from_num, "To": to, "Body": text}).encode("utf-8")

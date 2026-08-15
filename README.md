@@ -13,13 +13,11 @@ Vast.ai does not reliably tell you that a stopped instance is running again. Thi
 ```text
 instance start → onstart launches wakeup.sh → stale ACK is rejected → loop
     email + telegram + sms, with backoff
-you SSH in → touch ACK → loop sends “acked” and exits
+you SSH in → ack.sh writes this session's token to ACK → loop sends “acked”
+    and exits
+notifier restart in the same session → matching ACK remains valid
 next stop/start → prior-session ACK does not apply → nagging starts again
 ```
-
-The session-bound ACK behavior shown above is the target design. The initial
-implementation deletes ACK whenever the notifier process starts, so restarting
-the notifier within one container session can resume alerts.
 
 ## Quick start (on the Vast.ai instance)
 
@@ -34,21 +32,28 @@ chmod +x /workspace/vastai-wakeup/bin/*.sh
 /workspace/vastai-wakeup/bin/wakeup.sh --test-channels
 ```
 
-Follow [docs/DEPLOY.md](docs/DEPLOY.md) to select a reviewed revision, test
-channels, and configure the Vast.ai onstart field. Do not pull an unreviewed
-moving branch on every boot.
+Follow [docs/DEPLOY.md](docs/DEPLOY.md) to set `WAKEUP_REVISION` to a reviewed
+tag or commit, test channels, and configure the Vast.ai onstart field. Do not
+pull an unreviewed moving branch on every boot.
 
-Stop alerts for this boot:
+Stop alerts for this session:
 
 ```sh
 /workspace/vastai-wakeup/bin/ack.sh
-# or:  touch /workspace/vastai-wakeup/ACK
+# or write the current session token:
+# printf '%s\n' "$(cat /workspace/vastai-wakeup/session.id)" \
+#   > /workspace/vastai-wakeup/ACK
 ```
 
-Optional: ack automatically on SSH login:
+An empty `touch ACK` is ignored unless compatibility mode (`--keep-ack` or
+`WAKEUP_LEGACY_EMPTY_ACK=1`) is enabled.
+
+Optional: ack automatically on SSH login. Installation prints the trigger and
+risk; any SSH session with `SSH_CONNECTION` can stop alerts.
 
 ```sh
 /workspace/vastai-wakeup/bin/install-login-ack.sh
+# uninstall:  /workspace/vastai-wakeup/bin/install-login-ack.sh --uninstall
 ```
 
 ## Layout
@@ -76,6 +81,11 @@ bash, curl, and Python 3.9+ — available on the supported
 ```sh
 bash bin/selftest.sh
 ```
+
+`bin/selftest.sh` is the operator entry point. Focused offline cases live under
+`tests/` and use local HTTP/SMTP mocks. CI runs that suite on Python 3.9 and
+3.10 with no credentials and no external network access, plus a separate
+ShellCheck job.
 
 ## License
 

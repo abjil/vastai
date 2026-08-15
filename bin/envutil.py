@@ -6,6 +6,7 @@ import base64
 import os
 import re
 import shlex
+import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import List, Optional
@@ -23,11 +24,13 @@ DEFAULTS = {
     "ACK_POLL_SEC": "5",
     "MAX_ALERTS": "0",
     "WAKEUP_DRY_RUN": "0",
+    "WAKEUP_LEGACY_EMPTY_ACK": "0",
     "SMTP_TIMEOUT": "30",
     "CHANNEL_TIMEOUT_SEC": "30",
     "ERROR_DETAIL_MAX_CHARS": "2048",
     "LOG_MAX_BYTES": "1048576",
     "LOG_BACKUP_COUNT": "3",
+    "PUBLIC_IP_LOOKUP": "0",
 }
 
 # Credentials and message recipients remain file-only. These operational values
@@ -53,6 +56,20 @@ OPERATIONAL_OVERRIDE_KEYS = {
     "LOG_MAX_BYTES",
     "LOG_BACKUP_COUNT",
     "WAKEUP_UPTIME_FILE",
+    "SESSION_ID_FILE",
+    "WAKEUP_LOCK",
+    "ACKED_SESSION_FILE",
+    "WAKEUP_SESSION_ID",
+    "WAKEUP_SESSION_PROC",
+    "WAKEUP_SESSION_FALLBACK_DIR",
+    "WAKEUP_LEGACY_EMPTY_ACK",
+    "PUBLIC_IP_LOOKUP",
+    "PUBLIC_IP_CACHE_FILE",
+    "WAKEUP_PUBLIC_IP",
+    "WAKEUP_PUBLIC_IP_CMD",
+    "WAKEUP_PUBLIC_IP_URLS",
+    "TELEGRAM_API_BASE",
+    "TWILIO_API_BASE",
 }
 
 _POSITIVE_INTEGERS = {
@@ -65,7 +82,13 @@ _POSITIVE_INTEGERS = {
     "LOG_MAX_BYTES",
 }
 _NONNEGATIVE_INTEGERS = {"MAX_ALERTS", "LOG_BACKUP_COUNT"}
-_BOOLEAN_KEYS = {"WAKEUP_DRY_RUN", "SMTP_TLS", "SMTP_SSL"}
+_BOOLEAN_KEYS = {
+    "WAKEUP_DRY_RUN",
+    "WAKEUP_LEGACY_EMPTY_ACK",
+    "PUBLIC_IP_LOOKUP",
+    "SMTP_TLS",
+    "SMTP_SSL",
+}
 _PATH_KEYS = {
     "DATA_DIR",
     "ACK_FILE",
@@ -75,6 +98,10 @@ _PATH_KEYS = {
     "WAKEUP_RUNTIME",
     "WAKEUP_TEMPLATES",
     "STARTED_AT_FILE",
+    "SESSION_ID_FILE",
+    "WAKEUP_LOCK",
+    "ACKED_SESSION_FILE",
+    "PUBLIC_IP_CACHE_FILE",
 }
 
 _CHANNEL_REQUIREMENTS = {
@@ -123,6 +150,9 @@ CONFIG_EXPORT_KEYS = (
         "SMS_TO",
     }
 )
+
+# Documented keys that may appear in wakeup.env. This is the single allowlist.
+ACCEPTED_KEYS = set(CONFIG_EXPORT_KEYS)
 
 RESERVED_EXPORT_KEYS = {
     "DRY_RUN",
@@ -195,6 +225,57 @@ def split_list(value: str) -> list[str]:
     return [x.strip() for x in value.replace(";", ",").split(",") if x.strip()]
 
 
+def classify_file_keys(file_env: Mapping[str, str]) -> tuple[list[str], list[str]]:
+    """Return ``(reserved, unknown)`` keys found in a parsed env file."""
+
+    reserved = sorted(key for key in file_env if key in RESERVED_EXPORT_KEYS)
+    unknown = sorted(
+        key
+        for key in file_env
+        if key not in ACCEPTED_KEYS and key not in RESERVED_EXPORT_KEYS
+    )
+    return reserved, unknown
+
+
+def file_has_secrets(file_env: Mapping[str, str]) -> bool:
+    return any(str(file_env.get(key, "")).strip() for key in SECRET_KEYS)
+
+
+def should_enforce_env_permissions() -> bool:
+    return sys.platform.startswith("linux")
+
+
+def check_env_file_permissions(
+    path: Path,
+    file_env: Mapping[str, str],
+    *,
+    enforce: Optional[bool] = None,
+    allow_insecure: bool = False,
+) -> Optional[str]:
+    """Return an error if a secret-bearing env file is group/other-readable."""
+
+    if allow_insecure:
+        return None
+    if path.name.endswith(".example"):
+        return None
+    if enforce is None:
+        enforce = should_enforce_env_permissions()
+    if not enforce:
+        return None
+    if not file_has_secrets(file_env):
+        return None
+    try:
+        mode = path.stat().st_mode
+    except OSError as exc:
+        return f"cannot stat {path}: {exc}"
+    if mode & 0o077:
+        return (
+            f"{path} is readable by group or others "
+            f"(mode {mode & 0o777:04o}); chmod 600 before loading credentials"
+        )
+    return None
+
+
 def shell_exports(env: dict[str, str]) -> str:
     lines = []
     for key, val in env.items():
@@ -213,13 +294,37 @@ def load_config(
     environ: Optional[Mapping[str, str]] = None,
     require_channel: bool = False,
     dry_run: bool = False,
+    warnings: Optional[List[str]] = None,
+    enforce_permissions: Optional[bool] = None,
 ) -> dict[str, str]:
     """Load defaults, file values, and documented operational overrides."""
 
-    config = dict(DEFAULTS)
-    config.update(parse_env(path))
-
     source_env = os.environ if environ is None else environ
+    allow_insecure = str(source_env.get("WAKEUP_ALLOW_INSECURE_ENV", "")).strip().lower() in _TRUE_VALUES
+    file_env = parse_env(path)
+    reserved, unknown = classify_file_keys(file_env)
+    if reserved:
+        raise ConfigError(
+            "reserved names cannot appear in wakeup.env: " + ", ".join(reserved)
+        )
+    permission_error = check_env_file_permissions(
+        path,
+        file_env,
+        enforce=enforce_permissions,
+        allow_insecure=allow_insecure,
+    )
+    if permission_error:
+        raise ConfigError(permission_error)
+    if warnings is not None:
+        warnings.extend(
+            f"unknown configuration key {key}" for key in unknown
+        )
+
+    config = dict(DEFAULTS)
+    for key, value in file_env.items():
+        if key in ACCEPTED_KEYS:
+            config[key] = value
+
     for key in OPERATIONAL_OVERRIDE_KEYS:
         if key in source_env:
             config[key] = str(source_env[key])
@@ -234,6 +339,14 @@ def load_config(
     config.setdefault("WAKEUP_RUNTIME", str(Path(data_dir) / "runtime"))
     config.setdefault("WAKEUP_TEMPLATES", str(root / "templates"))
     config.setdefault("STARTED_AT_FILE", str(Path(data_dir) / "started_at"))
+    config.setdefault("SESSION_ID_FILE", str(Path(data_dir) / "session.id"))
+    config.setdefault("WAKEUP_LOCK", str(Path(data_dir) / "wakeup.lock"))
+    config.setdefault("ACKED_SESSION_FILE", str(Path(data_dir) / "acked.session"))
+    config.setdefault(
+        "PUBLIC_IP_CACHE_FILE", str(Path(config["WAKEUP_RUNTIME"]) / "public_ip")
+    )
+    config.setdefault("TELEGRAM_API_BASE", "https://api.telegram.org")
+    config.setdefault("TWILIO_API_BASE", "https://api.twilio.com")
 
     validate_config(
         config,
