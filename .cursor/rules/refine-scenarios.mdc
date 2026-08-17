@@ -1,0 +1,110 @@
+---
+alwaysApply: false
+---
+# Refine Requirements with Behavioral Scenarios
+
+## Goal
+
+Use concrete examples / Gherkin scenarios to validate important observable behavior in an existing PRD.
+
+Gherkin is a requirements probe and acceptance-contract format. It does **not** replace the PRD and must not be used to specify internal class structure, helper functions, algorithms, or incidental implementation details.
+
+## Required inputs
+
+Read:
+
+- `state-[feature].md`
+- `td-[feature].md`
+- `prd-[feature].md`
+
+If either is missing, stop and identify what is missing.
+
+## Output
+
+Create or update:
+
+- `/tasks/scenarios-[feature].feature`
+- `/tasks/prd-[feature].md` only when clarification requires a PRD change
+
+## Select behavior worth scenario coverage
+
+Prefer scenarios for:
+
+- business decisions;
+- important user-visible behavior;
+- state transitions;
+- permission boundaries;
+- boundary values;
+- error outcomes;
+- retries / idempotency;
+- interactions between rules;
+- risky or ambiguous requirements;
+- deterministic contracts around probabilistic or AI-generated behavior.
+
+Do not mechanically create a scenario for every sentence in the PRD.
+
+## Scenario identifiers and traceability
+
+Use stable scenario IDs and requirement tags, for example:
+
+```gherkin
+@GS-04 @FR-07 @BR-02 @AC-03
+Scenario: Retry after a transient failure
+  Given ...
+  When ...
+  Then ...
+```
+
+Every scenario must reference at least one PRD requirement/rule/criterion unless it is explicitly marked as an exploratory scenario awaiting a PRD decision.
+
+## Refinement loop
+
+For each important rule:
+
+```text
+PRD rule
+→ concrete example
+→ check whether expected behavior is uniquely determined
+→ if not, expose the ambiguity
+→ ask the user for the product decision
+→ update PRD and scenario together
+```
+
+Do not resolve consequential ambiguity by guessing.
+
+If a scenario contradicts the PRD, stop and surface the conflict. A generated scenario does not override the PRD.
+
+## Scenario quality
+
+Scenarios should describe externally observable behavior and use domain language.
+
+Prefer concise scenarios with one behavioral purpose. Avoid brittle assertions such as exact generated prose unless exact text is itself a requirement.
+
+For probabilistic/AI behavior, assert deterministic contracts and invariants such as:
+
+- valid output schema;
+- allowed classifications;
+- required grounding/citations;
+- forbidden claims;
+- bounded retry behavior;
+- safety constraints.
+
+## Product Gate
+
+When the PRD and scenarios agree:
+
+1. summarize any PRD changes made during scenario refinement;
+2. list remaining open questions;
+3. provide a concise coverage summary (which requirements have scenario coverage and which intentionally do not);
+4. ask the user to explicitly approve the **Product Gate**.
+
+Do not proceed to repository design analysis or architecture until the Product Gate is approved.
+
+When the user explicitly approves the Product Gate, update `state-[feature].md`:
+
+- `Product Gate: approved`
+- `Current phase: repository_analysis`
+- add/update the scenarios artifact path
+- record the approval in Approval / Change History
+
+Do not infer approval merely because the user asks a new unrelated question.

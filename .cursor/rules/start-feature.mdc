@@ -1,0 +1,176 @@
+---
+alwaysApply: false
+---
+# Start Feature: Task Description + PRD
+
+## Goal
+
+Turn the user's initial request into two artifacts:
+
+1. an immutable record of the original task and external constraints;
+2. a clarified Product Requirements Document describing what must be true, without prematurely designing the implementation.
+
+Do **not** implement code in this phase.
+
+## Outputs
+
+Create under `/tasks/`:
+
+- `td-[feature-name].md`
+- `state-[feature-name].md`
+- `prd-[feature-name].md`
+
+## Phase A — Preserve the Task Description
+
+Before rewriting or summarizing the request, capture the user's original task faithfully.
+
+The Task Description must include:
+
+- original request / problem statement;
+- explicitly stated goals;
+- explicitly stated constraints;
+- required deliverables;
+- external acceptance conditions;
+- user-supplied references or relevant files;
+- unresolved language exactly where meaning is uncertain.
+
+Do not silently improve, weaken, broaden, or reinterpret the user's constraints.
+
+A later PRD may organize and clarify the task, but the Task Description remains provenance.
+
+
+## Initialize durable workflow state
+
+Create `state-[feature-name].md` when the feature begins. This file tracks process state only; it does not replace the TD, PRD, scenarios, architecture, tasks, or evidence.
+
+Use:
+
+```markdown
+# Workflow State: [Feature]
+
+- **Current phase:** requirements
+- **Product Gate:** pending
+- **Technical Design Gate:** pending
+- **Task Plan Gate:** pending
+- **System Acceptance:** pending
+- **Traceability Audit:** pending
+
+## Artifacts
+- Task Description: `td-[feature].md`
+- PRD: `prd-[feature].md`
+- Scenarios: _not created_
+- Repository Analysis: _not created_
+- Architecture: _not created_
+- Tasks: _not created_
+- Acceptance: _not created_
+- Traceability: _not created_
+
+## Approval / Change History
+- [timestamp if available] Feature workflow initialized.
+```
+
+Never mark an approval gate approved without explicit user approval.
+
+## Phase B — Requirements discovery
+
+Before creating the final PRD, identify what is already known and what is materially ambiguous.
+
+Ask only questions whose answers could change product behavior, scope, acceptance, risk, or constraints. Group related questions together instead of asking one at a time.
+
+Useful areas include:
+
+- actors / users;
+- desired outcomes;
+- normal flows;
+- business rules;
+- inputs and outputs;
+- data contracts;
+- permissions;
+- state transitions;
+- errors and edge cases;
+- reliability / performance expectations;
+- security / privacy constraints;
+- compatibility / migration constraints;
+- UI/UX constraints;
+- non-goals;
+- deployment/publication deliverables;
+- measurable acceptance conditions.
+
+If the user's request already resolves a question, do not ask it again.
+
+Do not ask technical-design questions unless the answer is itself a product constraint (for example, "must use the existing API"). Architecture belongs to a later phase.
+
+## Phase C — Create the PRD
+
+Once enough information is available, create `prd-[feature-name].md`.
+
+Use stable identifiers so downstream artifacts can trace requirements.
+
+### Required structure
+
+```markdown
+# PRD: [Feature]
+
+## 1. Source
+- Task Description: `td-[feature].md`
+
+## 2. Problem / Context
+
+## 3. Goals
+
+## 4. Non-Goals
+
+## 5. Actors and Domain Concepts
+
+## 6. Functional Requirements
+- **FR-01:** ...
+- **FR-02:** ...
+
+## 7. Business Rules
+- **BR-01:** ...
+
+## 8. Data / Input / Output Contracts
+
+## 9. Error and Edge-Case Behavior
+
+## 10. Non-Functional Requirements
+- **NFR-01:** ...
+
+## 11. Acceptance Criteria
+- **AC-01:** ...
+
+## 12. External Constraints and Deliverables
+
+## 13. Open Questions
+```
+
+Only include sections that are meaningful, but never omit known non-functional or external constraints merely because they do not fit the feature's happy path.
+
+## Requirement-writing rules
+
+Requirements must be:
+
+- testable or otherwise verifiable where practical;
+- externally meaningful rather than file- or class-oriented;
+- explicit about important boundary/error behavior;
+- free of implementation details unless those details are user-mandated constraints.
+
+Avoid vague requirements such as "should work well" or "handle errors properly." State the required observable or measurable behavior.
+
+## Consistency check
+
+Before finishing:
+
+1. Compare the PRD against the Task Description.
+2. List any original constraint not represented in the PRD.
+3. Resolve omissions instead of silently dropping them.
+4. Clearly retain unresolved questions.
+
+## Stop condition
+
+After saving the Task Description and PRD:
+
+- summarize the major requirements and remaining open questions;
+- do **not** create architecture;
+- do **not** create implementation tasks;
+- do **not** modify production code.

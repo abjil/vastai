@@ -1,0 +1,106 @@
+---
+alwaysApply: false
+---
+# Traceability Audit
+
+## Goal
+
+Detect requirements or implementation work that was lost, invented, left unverified, or disconnected as the feature moved through multiple generated artifacts.
+
+## Inputs
+
+Read all available feature artifacts and inspect relevant changed code/history when available:
+
+- `state-[feature].md`
+- `td-[feature].md`
+- `prd-[feature].md`
+- `scenarios-[feature].feature`
+- `repo-analysis-[feature].md`
+- `architecture-[feature].md`
+- `tasks-[feature].md`
+- `acceptance-[feature].md`
+
+Verify `System Acceptance: pass` in `state-[feature].md` before treating this as the final audit. If acceptance has not passed, the audit may still be run diagnostically, but clearly label it non-final.
+
+## Output
+
+Create:
+
+- `/tasks/traceability-[feature].md`
+
+## Desired chain
+
+```text
+Original Task constraint/deliverable
+        ↓
+PRD requirement/rule/criterion
+        ↓
+Gherkin scenario (when behavior benefits from one)
+        ↓
+Architecture decision / implementation path
+        ↓
+Vertical-slice task
+        ↓
+Test / verification evidence
+        ↓
+Delivered code / configuration
+```
+
+Not every requirement needs every intermediate node. For example, a documentation deliverable may not need a Gherkin scenario. Missing links must be either justified or treated as gaps.
+
+## Audit checks
+
+Find and report:
+
+1. Original Task constraints/deliverables missing from the PRD.
+2. `FR/BR/AC/NFR` items with no downstream implementation or verification path.
+3. Important/risky behavioral requirements with no scenario coverage and no reason for omission.
+4. `GS-*` scenarios with no task or acceptance-test evidence.
+5. `ARCH-*` decisions that require implementation but have no task.
+6. Accepted `TASK-*` items with no upstream requirement/architecture justification.
+7. Task acceptance evidence that does not actually verify its acceptance conditions.
+8. Relevant changed production files not represented in the task evidence/relevant-files section.
+9. Non-functional requirements that were never measured or otherwise verified.
+10. Conflicts between artifacts that were never explicitly resolved.
+11. Requirements marked accepted despite `NOT VERIFIED` system-acceptance evidence.
+12. Tasks marked `[x]` without explicit human acceptance, or `[~]` tasks incorrectly treated as accepted.
+
+## Report structure
+
+```markdown
+# Traceability Audit: [Feature]
+
+## Summary
+- Complete links:
+- Gaps:
+- Orphaned implementation:
+- Unverified requirements:
+
+## Traceability Matrix
+| Source | Product Contract | Scenario | Architecture | Task | Evidence | Code | Status |
+|---|---|---|---|---|---|---|---|
+
+## Gaps Requiring Action
+
+## Intentional Exceptions
+
+## Recommended Corrections
+```
+
+## Result discipline
+
+Do not create fake traceability merely to make the matrix complete.
+
+If a link cannot be established from existing artifacts/evidence, report it as a gap.
+
+Do not reinterpret the original task to fit the implementation after the fact.
+
+
+## Workflow state update
+
+Update `state-[feature].md` with the traceability artifact path.
+
+- If no material gaps remain: `Traceability Audit: pass` and `Current phase: complete`.
+- If material gaps remain: `Traceability Audit: gaps` and set `Current phase` to the earliest upstream phase that must be corrected.
+
+Never mark the workflow complete merely because all code tasks are checked.

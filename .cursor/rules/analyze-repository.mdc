@@ -1,0 +1,94 @@
+---
+alwaysApply: false
+---
+# Repository Reconnaissance
+
+## Goal
+
+Establish the technical facts needed to design an implementation that fits the existing codebase instead of inventing a parallel architecture.
+
+This phase describes the repository; it does not redesign the product requirements.
+
+## Required inputs
+
+Read the approved product artifacts when available:
+
+- `state-[feature].md`
+- `td-[feature].md`
+- `prd-[feature].md`
+- `scenarios-[feature].feature`
+
+Before inspection, verify `Product Gate: approved` in `state-[feature].md`. If not approved, stop.
+
+## Output
+
+Create:
+
+- `/tasks/repo-analysis-[feature].md`
+
+## Investigation order
+
+Inspect only what is useful for the feature, but check the following where relevant:
+
+1. Project-level instructions (`README`, `AGENTS.md`, `.cursor/rules`, contribution docs).
+2. Directory/module architecture.
+3. Dependency and tool configuration (`package.json`, lockfiles, pyproject, Cargo, build files, etc.).
+4. Existing code implementing analogous behavior.
+5. Public/internal API conventions.
+6. State management and data-flow patterns.
+7. Persistence, schema and migration conventions.
+8. Authentication/authorization patterns.
+9. Error handling, logging and observability.
+10. Shared UI/design-system primitives.
+11. Test frameworks, test organization and fixtures.
+12. Existing commands for targeted tests, full tests, typecheck, lint, build and end-to-end checks.
+13. Deployment/runtime constraints relevant to the feature.
+
+Do not assume framework/tool choices from general experience. Verify them from the repository.
+
+## Required report structure
+
+```markdown
+# Repository Analysis: [Feature]
+
+## 1. Scope of Inspection
+
+## 2. Verified Repository Facts
+
+## 3. Existing Related Implementations
+
+## 4. Architecture / Dependency Constraints
+
+## 5. Test and Verification Tooling
+
+## 6. Likely Change Surface
+
+## 7. Reusable Components / Modules
+
+## 8. Risks and Compatibility Concerns
+
+## 9. Unknowns / Inferences
+
+## 10. Evidence
+- paths inspected
+- configuration files inspected
+- commands discovered
+```
+
+## Evidence discipline
+
+Clearly separate:
+
+- **Verified:** directly observed in repository files/configuration.
+- **Inference:** likely conclusion based on observed structure.
+- **Unknown:** not established yet.
+
+Whenever practical, cite the exact repository path that supports an important conclusion.
+
+## Greenfield projects
+
+If no meaningful existing codebase exists, do not fabricate conventions. Record the available baseline, existing toolchain if any, and the fact that architectural conventions are not yet established.
+
+## Stop condition
+
+Do not modify production code and do not create an architecture plan in this rule. Finish with a concise list of the most important constraints the architecture phase must respect. Update the repository-analysis artifact path and set `Current phase: architecture` in `state-[feature].md`. This phase itself does not create a new approval gate.

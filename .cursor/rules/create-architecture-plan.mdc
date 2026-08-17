@@ -1,0 +1,142 @@
+---
+alwaysApply: false
+---
+# Create Architecture and Implementation Plan
+
+## Goal
+
+Define how the approved product behavior will fit the actual codebase before implementation tasks are generated.
+
+Architecture must satisfy the PRD/scenarios and repository constraints. It must not silently alter product behavior.
+
+## Required inputs
+
+Read:
+
+- `state-[feature].md`
+- `td-[feature].md`
+- `prd-[feature].md`
+- `scenarios-[feature].feature`
+- `repo-analysis-[feature].md`
+
+Verify `Product Gate: approved` in `state-[feature].md`. If it is not approved, stop. Do not treat the existence of PRD/scenario files as approval.
+
+## Output
+
+Create after design decisions are resolved:
+
+- `/tasks/architecture-[feature].md`
+
+## Design process
+
+### 1. Identify consequential decisions
+
+Determine which choices materially affect:
+
+- system boundaries;
+- public/internal interfaces;
+- data ownership and data flow;
+- persistence/schema/migrations;
+- state management;
+- external dependencies;
+- security/permissions;
+- failure/retry/idempotency behavior;
+- backward compatibility;
+- performance/reliability;
+- operational/deployment behavior;
+- testability.
+
+### 2. Reuse before inventing
+
+Prefer existing project patterns and abstractions when they satisfy the requirements.
+
+Before introducing a new abstraction, dependency, subsystem, shared component or architectural pattern, confirm that an equivalent facility does not already exist.
+
+### 3. Discuss real alternatives
+
+When multiple materially different approaches are reasonable, do not silently choose one and produce a finished document.
+
+Present the user with:
+
+- Option A / Option B (and C if genuinely useful);
+- trade-offs;
+- compatibility with existing code;
+- risks;
+- recommendation and rationale.
+
+Ask for a decision/approval before finalizing that consequential choice.
+
+Do not create artificial alternatives for trivial implementation details.
+
+## Architecture identifiers
+
+Use stable IDs:
+
+- `ARCH-01`, `ARCH-02`, ... for architectural decisions/components/contracts.
+
+## Required plan structure
+
+```markdown
+# Architecture and Implementation Plan: [Feature]
+
+## 1. Inputs and Approved Product Contract
+
+## 2. Repository Constraints
+
+## 3. Proposed System Behavior and Boundaries
+
+## 4. Architectural Decisions
+- **ARCH-01:** ...
+  - Rationale:
+  - Alternatives considered:
+  - Requirements/scenarios served:
+
+## 5. Components and Responsibilities
+
+## 6. Interfaces and Data Contracts
+
+## 7. Data Flow / State Flow
+
+## 8. Persistence / Migration Plan
+
+## 9. Failure, Retry and Error Handling
+
+## 10. Security / Permissions
+
+## 11. Compatibility and Rollout
+
+## 12. Verification Strategy
+
+## 13. Implementation Sequence
+
+## 14. Traceability
+
+## 15. Risks / Open Technical Questions
+```
+
+Omit sections that truly do not apply, but do not omit known constraints.
+
+## Traceability requirement
+
+For every important `FR`, `NFR`, `BR`, `AC`, and `GS`:
+
+- map it to one or more relevant `ARCH-*` items; or
+- state explicitly that it requires no special architecture and will be handled directly in implementation/verification.
+
+## Technical Design Gate
+
+After the plan is complete:
+
+1. summarize the major architecture decisions;
+2. call out deviations from current repository patterns;
+3. list unresolved technical risks;
+4. ask the user to explicitly approve the **Technical Design Gate**.
+
+Do not generate implementation tasks or modify production code until approved.
+
+When the user explicitly approves the Technical Design Gate, update `state-[feature].md`:
+
+- `Technical Design Gate: approved`
+- `Current phase: task_planning`
+- add/update the architecture artifact path
+- record the approval in Approval / Change History.

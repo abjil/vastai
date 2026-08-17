@@ -1,0 +1,157 @@
+---
+alwaysApply: false
+---
+# Generate Vertical-Slice Tasks
+
+## Goal
+
+Create a task list that operationalizes the approved PRD, scenarios and architecture without redesigning them.
+
+Tasks should be coherent, independently reviewable **behavior slices**, not a sequence of tiny file edits.
+
+## Required inputs
+
+Read:
+
+- `state-[feature].md`
+- `prd-[feature].md`
+- `scenarios-[feature].feature`
+- `architecture-[feature].md`
+- `repo-analysis-[feature].md`
+
+Verify `Technical Design Gate: approved` in `state-[feature].md`. The Technical Design Gate must already be approved.
+
+## Output
+
+Create:
+
+- `/tasks/tasks-[feature].md`
+
+## Phase 1 — Propose slice structure
+
+First propose only the high-level implementation slices.
+
+A good slice:
+
+- delivers or enables a coherent behavior;
+- can be reviewed meaningfully;
+- can be verified with clear acceptance conditions;
+- has limited blast radius;
+- follows real dependencies.
+
+Avoid decomposition like:
+
+- create file;
+- add interface;
+- add import;
+- add hook;
+- add button.
+
+Those are implementation steps inside a slice, not user-review units.
+
+Do not target a predetermined number of slices. Use as many as the approved design naturally requires.
+
+Present the proposed slices and wait for explicit user approval before expanding them into the final task document.
+
+## Phase 2 — Build the task list
+
+Assign stable task IDs:
+
+- `TASK-01`, `TASK-02`, ...
+
+Each task must include:
+
+- behavior/outcome;
+- dependencies on previous tasks if any;
+- PRD requirements covered (`FR`, `NFR`, `BR`, `AC`);
+- scenarios covered (`GS`);
+- architecture items used (`ARCH`);
+- acceptance conditions;
+- verification plan;
+- expected change surface / likely files;
+- risk notes if relevant;
+- status.
+
+## Test / verification commands
+
+Discover commands from the repository analysis/configuration.
+
+Never hardcode a framework such as Jest, Vitest, pytest, Playwright, Cypress, etc. unless the repository actually uses it.
+
+Use the smallest relevant verification during a task, plus broader verification when the slice has wider effects.
+
+## Output format
+
+Use this pattern:
+
+```markdown
+# Implementation Tasks: [Feature]
+
+## Inputs
+- PRD: ...
+- Scenarios: ...
+- Architecture: ...
+- Repository Analysis: ...
+
+## Verification Commands Discovered
+- Targeted tests: `...`
+- Typecheck: `...`
+- Lint: `...`
+- Build: `...`
+- E2E: `...` (if applicable)
+
+## Task Marker Legend
+
+- `[ ]` — not implemented / in progress
+- `[~]` — implemented and verified by the agent, awaiting human approval
+- `[x]` — explicitly approved by the user
+
+## Tasks
+
+- [ ] **TASK-01 — [Behavioral outcome]**
+  - **Status:** pending
+  - **Depends on:** none
+  - **Covers:** FR-01, BR-02, AC-01
+  - **Scenarios:** GS-01, GS-02
+  - **Architecture:** ARCH-01, ARCH-03
+  - **Acceptance:**
+    - ...
+  - **Verification:**
+    - ...
+  - **Expected change surface:**
+    - `path/...`
+  - **Evidence:** _filled during implementation_
+
+- [ ] **TASK-02 — ...**
+  ...
+
+## Relevant Files
+_To be maintained during implementation._
+
+## Change Log
+_Record approved changes to the task plan._
+```
+
+## Coverage check
+
+Before finishing, check for:
+
+- PRD requirements with no task;
+- scenarios with no task;
+- architecture items that require implementation but have no task;
+- tasks with no traceable justification.
+
+Resolve or explicitly document intentional exceptions.
+
+## Stop condition
+
+Save the task list and ask the user to approve the **Task Plan Gate**. Do not modify production code in this rule.
+
+When the user explicitly approves the task plan, update `state-[feature].md`:
+
+- `Task Plan Gate: approved`
+- `Current phase: implementation`
+- add/update the task-list artifact path
+- record the approval in Approval / Change History.
+
+Implementation must not begin before this gate is approved.

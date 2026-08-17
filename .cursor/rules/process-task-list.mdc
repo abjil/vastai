@@ -1,0 +1,184 @@
+---
+alwaysApply: false
+---
+# Process Vertical-Slice Task List
+
+## Required workflow state
+
+Read `state-[feature].md` and verify:
+
+- `Product Gate: approved`
+- `Technical Design Gate: approved`
+- `Task Plan Gate: approved`
+
+If any is not approved, stop and identify the missing gate.
+
+## Core rule
+
+Work on exactly one approved `TASK-*` slice at a time.
+
+Task-list checkbox markers have three meanings:
+
+- `[ ]` — not yet implemented / currently being implemented;
+- `[~]` — implementation and agent verification are complete, but the slice is awaiting human approval;
+- `[x]` — explicitly approved/accepted by the user.
+
+Never use `[x]` merely because the agent finished coding.
+
+Do not start the next slice until the current slice has been reviewed and the user explicitly approves continuing.
+
+## Task statuses
+
+Use exactly these states:
+
+- `pending`
+- `in_progress`
+- `awaiting_review`
+- `accepted`
+- `blocked`
+
+State transitions:
+
+```text
+pending + [ ]
+  ↓
+in_progress + [ ]
+  ↓ implementation + verification complete
+awaiting_review + [~]
+  ↓ user approval
+accepted + [x]
+```
+
+If work cannot safely continue:
+
+```text
+in_progress → blocked
+```
+
+## Before starting a task
+
+1. Read the task entry and its referenced `FR/NFR/BR/AC`, `GS`, and `ARCH` items.
+2. Read the relevant current repository files before editing them.
+3. Confirm task dependencies are accepted.
+4. Change `Status: pending` to `Status: in_progress`.
+5. Do not broaden scope beyond the approved contracts.
+
+## Implementation loop for one slice
+
+Use this order where appropriate:
+
+```text
+Acceptance-test skeleton / executable contract
+→ unit/integration tests
+→ implementation
+→ targeted verification
+→ broader relevant checks
+→ inspect failures
+→ refine until the approved task contract is satisfied
+```
+
+This is not dogmatic TDD. If a test-first step is not useful for the slice (for example, a purely declarative configuration change), use the most meaningful executable verification instead and record why.
+
+## Verification
+
+Use repository-discovered commands. Do not invent or assume a test runner.
+
+At minimum, run the checks materially relevant to the changed code. Examples may include:
+
+- targeted tests;
+- integration tests;
+- typecheck;
+- lint;
+- build;
+- schema/migration checks;
+- E2E tests;
+- a deterministic manual verification when automation is unavailable.
+
+Do not claim a check passed if it was not run.
+
+## Completion before human review
+
+When implementation and verification are complete:
+
+1. Change the task marker from `[ ]` to `[~]`.
+2. **Do not mark the task `[x]`.**
+3. Set `Status: awaiting_review`.
+4. Update `Relevant Files` with every created/modified file and a one-line purpose.
+5. Fill the task's `Evidence` with tests/checks and outcomes.
+6. Record any deviations, assumptions, or limitations.
+7. Report to the user:
+   - what changed;
+   - important design/behavior details;
+   - files changed;
+   - verification executed and results;
+   - remaining risks/limitations.
+8. Ask: **"Approve this slice and continue to the next one?"**
+
+## After user response
+
+### If approved
+
+- change `[~]` to `[x]`;
+- change `Status: awaiting_review` to `Status: accepted`;
+- record approval in the task/change log if useful;
+- then start the next pending task only if the user's approval included permission to continue.
+
+### If changes are requested
+
+- change `[~]` back to `[ ]`;
+- change status back to `in_progress`;
+- implement the feedback;
+- rerun relevant verification;
+- return to `awaiting_review` and ask again.
+
+## Change-control protocol
+
+Implementation may reveal new information. Classify it before acting.
+
+### Level 1 — implementation detail
+
+May proceed without a new approval gate when all are true:
+
+- behavior/scope is unchanged;
+- architecture is unchanged;
+- public/internal contract is not materially changed;
+- schema/dependencies/security posture are not materially changed.
+
+Record the detail in the task evidence or task notes.
+
+### Level 2 — technical design change
+
+Stop and request approval before continuing if the task requires a material change to:
+
+- architecture;
+- public/internal interfaces;
+- persistence/schema;
+- dependency choice;
+- state ownership/data flow;
+- security/permissions;
+- compatibility/rollout strategy.
+
+Propose an `architecture-[feature].md` update and explain downstream task impacts.
+
+### Level 3 — product/requirements change
+
+Stop and return to the product artifacts if implementation reveals a required change to:
+
+- functional behavior;
+- business rules;
+- acceptance criteria;
+- scope/non-goals;
+- non-functional requirements;
+- external deliverables.
+
+Obtain user approval, update PRD/scenarios, then update architecture/tasks as needed before continuing.
+
+## Newly discovered tasks
+
+A new task may be added directly only if it is clearly necessary to deliver already-approved scope and does not trigger Level 2 or Level 3 change control. Record material task-plan changes in `state-[feature].md` Approval / Change History.
+
+Otherwise propose the task and rationale to the user first.
+
+## Parent/group completion
+
+If the task file contains groups or milestones, mark a group accepted only when all contained `TASK-*` slices are user-accepted.

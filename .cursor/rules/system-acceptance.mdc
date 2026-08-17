@@ -1,0 +1,127 @@
+---
+alwaysApply: false
+---
+# System Acceptance
+
+## Goal
+
+Determine whether the delivered system satisfies the approved feature contract. A fully checked task list is not sufficient evidence.
+
+## Preconditions
+
+Read all available feature artifacts:
+
+- `state-[feature].md`
+- `td-[feature].md`
+- `prd-[feature].md`
+- `scenarios-[feature].feature`
+- `repo-analysis-[feature].md`
+- `architecture-[feature].md`
+- `tasks-[feature].md`
+
+Verify the three approval gates are approved in `state-[feature].md`. All planned implementation tasks should normally be `[x]` / `accepted`. Treat `[~]` tasks as implemented but **not accepted**; identify any `[ ]` or `[~]` tasks before continuing.
+
+## Output
+
+Create:
+
+- `/tasks/acceptance-[feature].md`
+
+## Acceptance dimensions
+
+Verify, where applicable:
+
+1. Original user goals and external deliverables.
+2. Every functional requirement (`FR-*`).
+3. Every business rule (`BR-*`).
+4. Every acceptance criterion (`AC-*`).
+5. Every behavioral scenario (`GS-*`).
+6. Non-functional requirements (`NFR-*`).
+7. Cross-feature and cross-component interactions.
+8. Error/retry/boundary behavior.
+9. Security/permission requirements.
+10. Compatibility/migration requirements.
+11. Build/package/deployment/publication requirements.
+12. Architecture constraints that are externally or operationally important.
+
+## Evidence
+
+Run the most appropriate repository-supported verification available, such as:
+
+- relevant full test suites;
+- integration/E2E suites;
+- typecheck/lint/build;
+- migration validation;
+- static analysis;
+- deterministic manual checks when necessary.
+
+Never claim a requirement is verified solely because a task was marked complete.
+
+## Result states
+
+Use only:
+
+- `PASS`
+- `FAIL`
+- `NOT VERIFIED`
+- `NOT APPLICABLE`
+
+Every result needs concise evidence or an explanation.
+
+## Report format
+
+```markdown
+# System Acceptance: [Feature]
+
+## Summary
+- Overall result: PASS / FAIL / INCOMPLETE
+
+## Original Deliverables
+| Item | Result | Evidence |
+|---|---|---|
+
+## Functional Requirements
+| ID | Result | Evidence |
+|---|---|---|
+
+## Business Rules and Acceptance Criteria
+...
+
+## Behavioral Scenarios
+...
+
+## Non-Functional Requirements
+...
+
+## Cross-Feature / Integration Checks
+...
+
+## Verification Commands Executed
+...
+
+## Failures / Gaps
+...
+
+## Corrective Work Required
+...
+```
+
+## Failure handling
+
+If acceptance identifies a defect, omission or unverified contract:
+
+1. classify whether it is an implementation defect, technical-design issue, or requirements issue;
+2. create/propose corrective task(s) or upstream artifact changes using the same change-control rules;
+3. do not declare acceptance complete until the issue is resolved or explicitly waived by the user.
+
+## Stop condition
+
+Present the acceptance result and unresolved gaps. Do not hide `NOT VERIFIED` items behind an overall success statement.
+
+Update `state-[feature].md` with the acceptance artifact path and one of:
+
+- `System Acceptance: pass`
+- `System Acceptance: fail`
+- `System Acceptance: incomplete`
+
+Set `Current phase: traceability` only when acceptance passes; otherwise set/keep `Current phase: implementation` for corrective work.
